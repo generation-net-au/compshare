@@ -31,8 +31,8 @@ fi
 loc_id=`echo $id|sed -e 's+^Id: ++'`
 
 # Get the Library LCE for the organisation.
-id=`hammer lifecycle-environment info --name Library --organization-id $org_id`
-lib_lce_id=`echo $i|sed -e 's+^Id: ++'`
+id=`hammer lifecycle-environment info --name Library --organization-id $org_id --fields id`
+lib_lce_id=`echo $id|sed -e 's+^Id: ++'`
 
 for os in ${OFFERED_OS[*]}; do
 # For each operating system, create a hg-OS. LCE is Library.
@@ -55,7 +55,7 @@ for os in ${OFFERED_OS[*]}; do
     id=`hammer hostgroup info --title $parent_name/hg_$loc --organization-id $org_id --fields id`
     if [ -z "$id" ]; then
       # For each location, create a hg-loc underneath the hg-OS. LCE is Library.
-      hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lib_lce_id --location-id $loc_id --name hg_$loc --organization-id $org_id --parent $hg_os_id
+      hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lib_lce_id --location-id $loc_id --name hg_$loc --organization-id $org_id --parent-id $hg_os_id
       id=`hammer hostgroup info --title $parent_name/hg_$loc --organization-id $org_id --fields id`
     fi
 
@@ -64,16 +64,16 @@ for os in ${OFFERED_OS[*]}; do
 
     for prom in ${PROMOTION_PATHS[*]}; do
       # Find the LCE, if it exists.
-      id=`hammer lifecycle-environment info --name lce_$prom --organization-id $org_id`
+      id=`hammer lifecycle-environment info --name lce_$prom --organization-id $org_id --fields id`
       if [ -z "$id" ]; then
         # Create, or default? For now: default
-        id=`hammer lifecycle-environment info --name Library --organization-id $org_id`
+        id=`hammer lifecycle-environment info --name Library --organization-id $org_id --fields id`
       fi
-      lce_id=`echo $i|sed -e 's+^Id: ++'`
+      lce_id=`echo $id|sed -e 's+^Id: ++'`
       
       id=`hammer hostgroup info --title $loc_parent_name/hg_$prom --organization-id $org_id --fields id`
       if [ -z "$id" ]; then
-        hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lce_id --location-id $loc_id --name hg_$prom --organization-id $org_id --parent $hg_loc_id
+        hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lce_id --location-id $loc_id --name hg_$prom --organization-id $org_id --parent-id $hg_loc_id
       fi
     done
   done
