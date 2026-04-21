@@ -11,6 +11,42 @@ DEFAULT_CONTENT_VIEW="Default Organization View"
 # Check if the organisation object exists, create it if not
 id=`hammer organization info --name $ORG --fields id`
 
+# Look at a host group. Check if it's a member of the organisation that we want
+# it to be part of. If yes - do nothing. If no - add it, without clobbering
+# any existing organisation memberships.
+#
+# Parameters:
+#   $1 - the title of the hostgroup. (Not the name - the fully qualified title.)
+#   $2 - the organisation ID that it should belong to.
+function update_hostgroup () {
+  local x
+  local have_match
+  local new_org_ids
+  local i
+
+  x=`hammer --output json hostgroup info --title $1|jq '.Organizations[].Id'`
+  have_match=false
+  new_org_ids="$2"
+  for i in $x; do
+    if [ $i -eq $2 ]; then
+      have_match=true
+      return
+    else
+      new_org_ids="$i,$new_org_ids"
+    fi
+  done
+
+  # Note that we've been building up $new_org_ids by pre-pending membership
+  # IDs, followed by a comma, starting with just the organisation that the
+  # host group should be a member of. Thus, $new_org_ids will be exactly the
+  # list of organisations the group should be in.
+  if [ $have_match = "false" ]; then
+    hammer hostgroup update --title $1 --organization-ids "$new_org_ids"
+  else
+    echo We should never get here.
+  fi
+}
+
 if [ -z "$id" ]; then
   hammer organization create --name "$ORG"
   id=`hammer organization info --name $ORG --fields id`
@@ -37,12 +73,28 @@ lib_lce_id=`echo $id|sed -e 's+^Id: ++'`
 # Loop through the operating systems that we want to offer.
 for os in ${OFFERED_OS[*]}; do
   # For each operating system, create a hg-OS. LCE at this level is Library.
-  # XXX: Check if the hg_OS group already exists in a different organisation, and
-  # extend it to our organisation.
-  id=`hammer hostgroup info --name hg_$os --organization-id $org_id --fields id`
+  # The hg_OS group might already exist in a different organisation, in which
+  # case, extend it to our organisation.
+  id=`hammer hostgroup info --title hg_$os --fields id`
   if [ -z "$id" ]; then
     hammer hostgroup create --name hg_$os --organization-id $org_id
-    id=`hammer hostgroup info --name hg_$os --organization-id $org_id --fields id`
+    id=`hammer hostgroup info --title hg_$os --fields id`
+  else
+    update_hostgroup hg_$os $org_id
+    #x=`hammer --output json hostgroup info --title hg_$os|jq '.Organizations[].Id'`
+    #have_match=false
+    #new_org_ids=''
+    #for i in $x; do
+    #  if [ $i -eq $org_id ]; then
+    #    have_match=true
+    #  else
+    #    new_org_ids="$i,$new_org_ids"
+    #  fi
+    #done
+    #if [ $have_match="false" ]; then
+    #  # Update the hostgroup to also be visible to this organisation.
+    #  hammer hostgroup update --title hg_$os --organization-ids "$new_org_ids"$org_id
+    #fi
   fi
 
   parent_name=hg_$os
@@ -59,12 +111,13 @@ for os in ${OFFERED_OS[*]}; do
 
   # Now create the sub-locations for each operating system.
   for loc in ${TENANT_LOCS[*]}; do
-    id=`hammer hostgroup info --title $parent_name/hg_$loc --organization-id $org_id --fields id`
-    # XXX: Check if the hg_LOC group already exists for different organisations and extend it to ours if so.
+    id=`hammer hostgroup info --title $parent_name/hg_$loc --fields id`
     if [ -z "$id" ]; then
       # Once again, lifecycle environment is Library at this level.
       hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lib_lce_id --location-id $loc_id --name hg_$loc --organization-id $org_id --parent-id $hg_os_id
-      id=`hammer hostgroup info --title $parent_name/hg_$loc --organization-id $org_id --fields id`
+      id=`hammer hostgroup info --title $parent_name/hg_$loc --fields id`
+    else
+      update_hostgroup $parent_name/hg_$loc $org_id
     fi
 
     hg_loc_id=`echo $id|sed -e 's+^Id: ++'`
@@ -80,9 +133,11 @@ for os in ${OFFERED_OS[*]}; do
       fi
       lce_id=`echo $id|sed -e 's+^Id: ++'`
       
-      id=`hammer hostgroup info --title $loc_parent_name/hg_$prom --organization-id $org_id --fields id`
+      id=`hammer hostgroup info --title $loc_parent_name/hg_$prom --fields id`
       if [ -z "$id" ]; then
         hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lce_id --location-id $loc_id --name hg_$prom --organization-id $org_id --parent-id $hg_loc_id
+      else
+        update_hostgroup $loc_parent_name/hg_$prom $org_id
       fi
     done
   done
