@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Pre-create content view and filters; publish; and pre create all lifecycle environment paths.
+
 # Parameters that can be changed, or passed in. Hard coded for testing purposes.
 ORG=sjl_test
 MAIN_LOC=G8NET
@@ -47,6 +49,28 @@ function update_hostgroup () {
   fi
 }
 
+# Look for and create a lifecycle environment if it doesn't already exist.
+# Return the ID.
+#
+# Parameters:
+#   $1 - name of the new environment
+#   $2 - organization ID to create it in
+#   $3 - the prior environment ID (either the Library ID, or the tail end of the chain.)
+function create_lifecycle_env () {
+  local x
+  local id
+
+  x=`hammer lifecycle-environment info --fields id --name $1 --organization-id $2`
+  if [ -z "$x" ]; then
+    # It doesn't exist. Create it.
+    hammer lifecycle-environment create --name $1 --organization-id $2 --prior-id $3
+    x=`hammer lifecycle-environment info --fields id --name $1 --organization-id $2`
+  fi
+
+  id=`echo $x|sed -e 's+Id: ++'`
+  echo $id
+}
+
 if [ -z "$id" ]; then
   hammer organization create --name "$ORG"
   id=`hammer organization info --name $ORG --fields id`
@@ -66,12 +90,59 @@ fi
 
 loc_id=`echo $id|sed -e 's+^Id: ++'`
 
+
+
 # Get the Library LCE for the organisation.
 id=`hammer lifecycle-environment info --name Library --organization-id $org_id --fields id`
 lib_lce_id=`echo $id|sed -e 's+^Id: ++'`
 
+# Check for the environment path: we want two streams. Stream one is Library -> lce_infra.
+# Stream two is Library -> lce_canary -> lce_test -> lce_prod -> lce_dev.
+# Note that the LCE name must be unique within an organisation, so if one of those
+# already exists, we assume that it's in the right position in the stream.
+
+# lce_infra is its own thing.
+infra_lce_id=`create_lifecycle_env lce_infra $org_id $lib_lce_id`
+
+prev_id=$lib_lce_id
+for i in canary test prod dev; do
+  prev_id=`create_lifecycle_env lce_$i $org_id $lib_lce_id`
+  declare "${i}_lce_id"=$prev_id
+done
+
+# Debugging. Remove. XXX
+echo $canary_lce_id $test_lce_id $prod_lce_id $dev_lce_id
+
+# Now that we have the environment paths: look for and validate the content views.
+
 # Loop through the operating systems that we want to offer.
 for os in ${OFFERED_OS[*]}; do
+  # Check whether a content view for the OS exists. If it doesn't, create it, and apply the
+  # desired filters.
+  id=`hammer content-view info --name cv_$os --organization-id $org_id --fields id`
+  if [ -z "$id" ]; then
+    # We don't assign repositories here. Assigning repositories requires that the organisation
+    # have a valid subscription manifest applied. Doing that via this script is... complicated.
+    hammer content-view create --name cv_$os --organization-id $org_id --auto-publish false
+    id=`hammer content-view info --name cv_$os --organization-id $org_id --fields id`
+    cv_os_id=`echo $id|sed -e 's+^Id: ++'`
+
+    # Create the filters. There are no repositories, but we create the filters anyway so that
+    # the framework is in place.
+
+    # First, the RPM filter.
+    hammer content-view filter create --content-view-id $cv_os_id --inclusion true --name filter_noerrata --organization-id $org_id --original-packages true --type rpm
+
+    # Second, the errata filter.
+    hammer content-view filter create --content-view-id $cv_os_id --inclusion true --name filter_periodically_updates --organization-id $org_id --type erratum
+    cvf_id=`hammer content-view filter --content-view-id $cv_os_id --fields id --name filter_periodically_updates --organization-id $org_id|sed -e 's+^Id: ++'`
+    # XXX: Defaults to today. Is this correct?
+    hammer content-view filter rule create --content-view-filter-id $cvf_id --content-view-id $cv_os_id --end-date `date -I` --organization-id $org_id --types enhancement,bugfix,security
+
+    # XXX: Do we need to publish a version before we proceed?
+  fi
+  cv_os_id=`echo $id|sed -e 's+^Id: ++'`
+
   # For each operating system, create a hg-OS. LCE at this level is Library.
   # The hg_OS group might already exist in a different organisation, in which
   # case, extend it to our organisation.
@@ -81,33 +152,11 @@ for os in ${OFFERED_OS[*]}; do
     id=`hammer hostgroup info --title hg_$os --fields id`
   else
     update_hostgroup hg_$os $org_id
-    #x=`hammer --output json hostgroup info --title hg_$os|jq '.Organizations[].Id'`
-    #have_match=false
-    #new_org_ids=''
-    #for i in $x; do
-    #  if [ $i -eq $org_id ]; then
-    #    have_match=true
-    #  else
-    #    new_org_ids="$i,$new_org_ids"
-    #  fi
-    #done
-    #if [ $have_match="false" ]; then
-    #  # Update the hostgroup to also be visible to this organisation.
-    #  hammer hostgroup update --title hg_$os --organization-ids "$new_org_ids"$org_id
-    #fi
   fi
 
   parent_name=hg_$os
 
   hg_os_id=`echo $id|sed -e 's+^Id: ++'`
-
-  # Look for the cv_OS content view and get its ID if it exists. If it doesn't exist,
-  # use the default content view.
-  id=`hammer content-view info --name cv_$os --organization-id $org_id --fields id`
-  if [ -z "$id" ]; then
-    id=`hammer content-view info --name "$DEFAULT_CONTENT_VIEW" --organization-id $org_id --fields id`
-  fi
-  cv_os_id=`echo $id|sed -e 's+^Id: ++'`
 
   # Now create the sub-locations for each operating system.
   for loc in ${TENANT_LOCS[*]}; do
@@ -125,13 +174,16 @@ for os in ${OFFERED_OS[*]}; do
 
     # Lastly: promotion paths.
     for prom in ${PROMOTION_PATHS[*]}; do
+      lce_varname=${prom}_lce_id
       # Find the LCE, if it exists.
-      id=`hammer lifecycle-environment info --name lce_$prom --organization-id $org_id --fields id`
-      if [ -z "$id" ]; then
+      # This is a bit of bash magic. ${!foo} means "look at the variable foo. Expand it. Look at the variable that it refers to and return its value."
+      lce_id=${!lce_varname}
+      if [ -z "$lce_id" ]; then
+        echo "Couldn't find the LCE ID for $prom - we shouldn't be here.."
         # Create, or default? For now: default
         id=`hammer lifecycle-environment info --name Library --organization-id $org_id --fields id`
+        lce_id=`echo $id|sed -e 's+^Id: ++'`
       fi
-      lce_id=`echo $id|sed -e 's+^Id: ++'`
       
       id=`hammer hostgroup info --title $loc_parent_name/hg_$prom --fields id`
       if [ -z "$id" ]; then
@@ -142,4 +194,3 @@ for os in ${OFFERED_OS[*]}; do
     done
   done
 done
-
