@@ -8,7 +8,6 @@ MAIN_LOC=G8NET
 OFFERED_OS=("rhel8" "rhel9" "rhel10")
 TENANT_LOCS=("miki" "stu" "thorne")
 PROMOTION_PATHS=("canary" "dev" "test" "prod")
-DEFAULT_CONTENT_VIEW="Default Organization View"
 
 # Check if the organisation object exists, create it if not
 id=`hammer organization info --name $ORG --fields id`
@@ -63,7 +62,7 @@ function create_lifecycle_env () {
   x=`hammer lifecycle-environment info --fields id --name $1 --organization-id $2`
   if [ -z "$x" ]; then
     # It doesn't exist. Create it.
-    hammer lifecycle-environment create --name $1 --organization-id $2 --prior-id $3
+    hammer lifecycle-environment create --name $1 --organization-id $2 --prior-id $3 > /dev/null 2>&1
     x=`hammer lifecycle-environment info --fields id --name $1 --organization-id $2`
   fi
 
@@ -110,9 +109,6 @@ for i in canary test prod dev; do
   declare "${i}_lce_id"=$prev_id
 done
 
-# Debugging. Remove. XXX
-echo $canary_lce_id $test_lce_id $prod_lce_id $dev_lce_id
-
 # Now that we have the environment paths: look for and validate the content views.
 
 # Loop through the operating systems that we want to offer.
@@ -133,9 +129,10 @@ for os in ${OFFERED_OS[*]}; do
     # First, the RPM filter.
     hammer content-view filter create --content-view-id $cv_os_id --inclusion true --name filter_noerrata --organization-id $org_id --original-packages true --type rpm
 
-    # Second, the errata filter.
+    # Second, the errata filter and rule.
     hammer content-view filter create --content-view-id $cv_os_id --inclusion true --name filter_periodically_updates --organization-id $org_id --type erratum
-    cvf_id=`hammer content-view filter --content-view-id $cv_os_id --fields id --name filter_periodically_updates --organization-id $org_id|sed -e 's+^Id: ++'`
+    id=`hammer content-view filter info --content-view-id $cv_os_id --fields 'filter id' --name filter_periodically_updates --organization-id $org_id`
+    cvf_id=`echo $id|sed -e 's+^Filter ID: ++'`
     # XXX: Defaults to today. Is this correct?
     hammer content-view filter rule create --content-view-filter-id $cvf_id --content-view-id $cv_os_id --end-date `date -I` --organization-id $org_id --types enhancement,bugfix,security
 
@@ -194,3 +191,4 @@ for os in ${OFFERED_OS[*]}; do
     done
   done
 done
+
