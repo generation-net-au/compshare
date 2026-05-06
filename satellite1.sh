@@ -16,12 +16,14 @@ PROMOTION_PATHS=("canary" "test" "prod" "dev")
 # Parameters:
 #   $1 - the title of the hostgroup. (Not the name - the fully qualified title.)
 #   $2 - the organisation ID that it should belong to.
-# XXX - Also take the location ID and assign it. Fix here and all calls.
+#   $3 - the location ID (for $MAIN_LOC).
 function update_hostgroup () {
   local current_hg_associated_org_list
   local have_match
   local new_org_ids
   local org
+  local current_hg_associated_loc_list
+  local new_loc_ids
 
   current_hg_associated_org_list=`hammer --output json hostgroup info --title $1|jq '.Organizations[].Id'`
   have_match=false
@@ -37,12 +39,24 @@ function update_hostgroup () {
     fi
   done
 
+  # We've validated that the hostgroup isn't in the organisation. Check its
+  # list of locations.
+  current_hg_associated_loc_list=`hammer --output json hostgroup info --title $1|jq '.Locations[].Id'`
+  new_loc_ids="$3"
+  for loc in $current_hg_associated_loc_list; do
+    # Only add the location to the list if it isn't the 'new' location. If it is,
+    # do nothing (as we already initialised the list with it).
+    if [ $loc -ne $3 ]; then
+      new_loc_ids="$loc,new_loc_ids"
+    fi
+  done
+
   # Note that we've been building up $new_org_ids by pre-pending organisation
   # IDs, followed by a comma, starting with just the organisation that the
   # host group should be a member of. Thus, $new_org_ids will be exactly the
   # list of organisations the group should be in.
   if [ $have_match = "false" ]; then
-    hammer hostgroup update --title $1 --organization-ids "$new_org_ids"
+    hammer hostgroup update --title $1 --organization-ids "$new_org_ids" --location-ids $new_loc_ids
   else
     echo We should never get here.
   fi
@@ -105,29 +119,87 @@ lib_lce_id=`echo $id|sed -e 's+^Id: ++'`
 infra_lce_id=`create_lifecycle_env lce_infra $org_id $lib_lce_id`
 
 prev_id=$lib_lce_id
+lce_path_ids=()
 for i in ${PROMOTION_PATHS[*]}; do
-  # XXX: clean up the names here to use an indexed array
   prev_id=`create_lifecycle_env lce_$i $org_id $prev_id`
-  declare "${i}_lce_id"=$prev_id
+  lce_path_ids+=( $prev_id )
 done
 
 # Now that we have the environment paths: look for and validate the content views.
 
+
+# Parameters:
+#   $1 - the operating system (rhel8, rhel9, rhel94, etc.)
+#   $2 - the organisation ID
+#   $3 - the architecture (defaults to x86_64 if not specified)
+function build_repo_list () {
+  # Munge the OS into the form used for naming repositories. Note:
+  # this pattern doesn't work for RHEL 7 or earlier.
+  local os_ver=`echo $1|sed -e 's+^rhel++`
+  local org_id=$2
+  local arch=$3
+
+  if [ "$arch" = "" ]; then
+    arch=x86_64
+  fi
+
+  # We're looking specifically for three repositories:
+  # Content labels:
+  #   rhel-X-for-ARCH-baseos-rpms
+  #   rhel-X-for-ARCH-appstream-rpms
+  #   satellite-client-6-for-rhel-X-ARCH-rpms
+  # or names:
+  #   Red Hat Enterprise Linux X for ARCH - BaseOS RPMs X
+  #   Red Hat Enterprise Linux X for ARCH - AppStream RPMs X
+  #   Red Hat Satellite Client 6 for RHEL X ARCH RPMs
+  #
+  # Hammer only lets us search by name, not content label (a pity), so that's what we're doing.
+  local os_name="Red Hat Enterprise Linux ${os_ver} for ${arch}"
+  local product_name="Red Hat Enterprise Linux for ${arch}"
+
+  local baseos_rpms_repo=`hammer repository info --name "${os_name} - BaseOS RPMs ${os_ver}" --organization-id $org_id --fields id --product $product_name`
+  if [ -z "$baseos_rpms_repo" ]; then
+    # If the base OS RPMs aren't available, let's assume that the others are unavailable
+    # as well.
+    return
+  fi
+  local appstream_rpms_repo=`hammer repository info --name "${os_name} - AppStream RPMs ${os_ver}" --organization-id $org_id --fields id --product $product_name`
+  if [ -z "$appstream_rpms_repo" ]; then
+    # This shouldn't happen, quietly abort.
+    return
+  fi
+
+  # Convert the text string hammer outputs into a comma separated list of IDs.
+  local repository_ids="`echo $baseos_rpms_repo|sed -e 's+^Id: ++'`,`echo $appstream_rpms_repo|sed -e 's+^Id: ++'`"
+  local satellite_rpms_repo=`hammer repository info --name "Red Hat Satellite Client 6 for RHEL ${os_ver} ${arch} RPMs" --organization-id $org_id --fields id --product $product_name`
+  if [ -z $satellite_rpms_repo ]; then
+    echo $repository_ids
+    return
+  fi
+  local sat_repo_id=`echo $satellite_rpms_repo|sed -e 's+^Id: ++'`
+  echo ${repository_ids},${sat_repo_id}
+}
+
 # Loop through the operating systems that we want to offer.
-# XXX: change os to tier1_hg_os
-for os in ${OFFERED_OS[*]}; do
+for tier1_hg_os in ${OFFERED_OS[*]}; do
   # Check whether a content view for the OS exists. If it doesn't, create it, and apply the
   # desired filters.
-  cv_id_str=`hammer content-view info --name cv_$os --organization-id $org_id --fields id`
+  cv_id_str=`hammer content-view info --name cv_$tier1_hg_os --organization-id $org_id --fields id`
   if [ -z "$cv_id_str" ]; then
-    # XXX: Attempt to add the repositories in.
-    # We don't assign repositories here. Assigning repositories requires that the organisation
-    # have a valid subscription manifest applied. Doing that via this script is... complicated.
-    hammer content-view create --name cv_$os --organization-id $org_id --auto-publish false
-    cv_id_str=`hammer content-view info --name cv_$os --organization-id $org_id --fields id`
+    # Attempt to add the repositories in. Note that this requires a subscription
+    # manifest. If we created the organisation, there won't be a manifest, so there
+    # won't be any repositories.
+    repo_list=`build_repo_list $tier1_hg_os $org_id x86_64`
+    if [ -z "$repo_list ]; then
+      repo_param=""
+    else
+      repo_param="--repository-ids ${repo_list}"
+    fi
+    hammer content-view create --name cv_$tier1_hg_os --organization-id $org_id --auto-publish false $repo_param
+    cv_id_str=`hammer content-view info --name cv_$tier1_hg_os --organization-id $org_id --fields id`
     cv_os_id=`echo $cv_id_str|sed -e 's+^Id: ++'`
 
-    # Create the filters. There are no repositories, but we create the filters anyway so that
+    # Create the filters. There might be no repositories, but we create the filters anyway so that
     # the framework is in place.
 
     # First, the RPM filter.
@@ -149,11 +221,10 @@ for os in ${OFFERED_OS[*]}; do
   # case, extend it to our organisation.
   str_hg_id=`hammer hostgroup info --title hg_$os --fields id`
   if [ -z "$str_hg_id" ]; then
-    # XXX - LCE ID?
-    hammer hostgroup create --name hg_$os --organization-id $org_id
+    hammer hostgroup create --name hg_$os --organization-id $org_id --lifecycle-environment-id $lib_lce_id
     str_hg_id=`hammer hostgroup info --title hg_$os --fields id`
   else
-    update_hostgroup hg_$os $org_id
+    update_hostgroup hg_$os $org_id $loc_id
   fi
 
   parent_name=hg_$os
@@ -162,39 +233,35 @@ for os in ${OFFERED_OS[*]}; do
   hg_os_id=`echo $str_hg_id|sed -e 's+^Id: ++'`
 
   # Now create the nested location hostgroups for each operating system.
-  # XXX: change loc to tier2_hg_loc
-  for loc in ${TENANT_LOCS[*]}; do
-    id=`hammer hostgroup info --title $parent_name/hg_$loc --fields id`
+  for tier2_hg_loc in ${TENANT_LOCS[*]}; do
+    id=`hammer hostgroup info --title $parent_name/hg_$tier2_hg_loc --fields id`
     if [ -z "$id" ]; then
       # Once again, lifecycle environment is Library at this level.
-      hammer hostgroup create --content-view-id $cv_os_id --lifecycle-environment-id $lib_lce_id --location-id $loc_id --name hg_$loc --organization-id $org_id --parent-id $hg_os_id
-      id=`hammer hostgroup info --title $parent_name/hg_$loc --fields id`
+      hammer hostgroup create --name hg_$tier2_hg_loc --content-view-id $cv_os_id --lifecycle-environment-id $lib_lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_os_id
+      id=`hammer hostgroup info --title $parent_name/hg_$tier2_hg_loc --fields id`
     else
-      update_hostgroup $parent_name/hg_$loc $org_id
+      update_hostgroup $parent_name/hg_$tier2_hg_loc $org_id $loc_id
     fi
 
     hg_loc_id=`echo $id|sed -e 's+^Id: ++'`
-    loc_parent_name=$parent_name/hg_$loc
+    loc_parent_name=$parent_name/hg_$tier2_hg_loc
 
-    # Lastly: promotion paths.
-    # XXX: Change prom to tier3_hg_prom
-    for prom in ${PROMOTION_PATHS[*]}; do
-      lce_varname=${prom}_lce_id
+    # Lastly: promotion paths. Tier 3.
+    for count in ${!PROMOTION_PATHS[@]}; do
+      tier3_hg_name=hg_${PROMOTION_PATHS[$count]}
       # Find the LCE, if it exists.
-      # This is a bit of bash magic. ${!foo} means "look at the variable foo. Expand it. Look at the variable that it refers to and return its value."
-      lce_id=${!lce_varname}
+      lce_id=${lce_path_ids[$count]}
       if [ -z "$lce_id" ]; then
-        echo "Couldn't find the LCE ID for $prom - we shouldn't be here.."
+        echo "Couldn't find the LCE ID for ${PROMOTION_PATHS[$count]} - we shouldn't be here.."
         # Create, or default? For now: default
-        id=`hammer lifecycle-environment info --name Library --organization-id $org_id --fields id`
-        lce_id=`echo $id|sed -e 's+^Id: ++'`
+        lce_id=$lib_lce_id
       fi
       
-      id=`hammer hostgroup info --title $loc_parent_name/hg_$prom --fields id`
+      id=`hammer hostgroup info --title $loc_parent_name/$tier3_hg_name --fields id`
       if [ -z "$id" ]; then
-        hammer hostgroup create --name hg_$prom --content-view-id $cv_os_id --lifecycle-environment-id $lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_loc_id
+        hammer hostgroup create --name $tier3_hg_name --content-view-id $cv_os_id --lifecycle-environment-id $lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_loc_id
       else
-        update_hostgroup $loc_parent_name/hg_$prom $org_id
+        update_hostgroup $loc_parent_name/$tier3_hg_name $org_id $loc_id
       fi
     done
   done
