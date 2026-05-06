@@ -3,10 +3,10 @@
 # Pre-create content view and filters; publish; and pre create all lifecycle environment paths.
 
 # Parameters that can be changed, or passed in. Hard coded for testing purposes.
-ORG=sjl_test
+ORG=sjl_t10
 MAIN_LOC=G8NET
 OFFERED_OS=("rhel8" "rhel9" "rhel10")
-TENANT_LOCS=("miki" "stu" "thorne")
+TENANT_LOCS=("loc1" "loc2" "loc3")
 PROMOTION_PATHS=("canary" "test" "prod" "dev")
 
 # Look at a host group. Check if it's a member of the organisation that we want
@@ -119,10 +119,12 @@ lib_lce_id=`echo $id|sed -e 's+^Id: ++'`
 infra_lce_id=`create_lifecycle_env lce_infra $org_id $lib_lce_id`
 
 prev_id=$lib_lce_id
+all_lce_ids="$lib_lce_id,$infra_lce_id"
 lce_path_ids=()
 for i in ${PROMOTION_PATHS[*]}; do
   prev_id=`create_lifecycle_env lce_$i $org_id $prev_id`
   lce_path_ids+=( $prev_id )
+  all_lce_ids="$all_lce_ids,$prev_id"
 done
 
 # Now that we have the environment paths: look for and validate the content views.
@@ -135,7 +137,7 @@ done
 function build_repo_list () {
   # Munge the OS into the form used for naming repositories. Note:
   # this pattern doesn't work for RHEL 7 or earlier.
-  local os_ver=`echo $1|sed -e 's+^rhel++`
+  local os_ver=`echo $1|sed -e 's+^rhel++'`
   local org_id=$2
   local arch=$3
 
@@ -157,13 +159,13 @@ function build_repo_list () {
   local os_name="Red Hat Enterprise Linux ${os_ver} for ${arch}"
   local product_name="Red Hat Enterprise Linux for ${arch}"
 
-  local baseos_rpms_repo=`hammer repository info --name "${os_name} - BaseOS RPMs ${os_ver}" --organization-id $org_id --fields id --product $product_name`
+  local baseos_rpms_repo=`hammer repository info --name "${os_name} - BaseOS RPMs ${os_ver}" --organization-id $org_id --fields id --product "$product_name"`
   if [ -z "$baseos_rpms_repo" ]; then
     # If the base OS RPMs aren't available, let's assume that the others are unavailable
     # as well.
     return
   fi
-  local appstream_rpms_repo=`hammer repository info --name "${os_name} - AppStream RPMs ${os_ver}" --organization-id $org_id --fields id --product $product_name`
+  local appstream_rpms_repo=`hammer repository info --name "${os_name} - AppStream RPMs ${os_ver}" --organization-id $org_id --fields id --product "$product_name"`
   if [ -z "$appstream_rpms_repo" ]; then
     # This shouldn't happen, quietly abort.
     return
@@ -171,7 +173,7 @@ function build_repo_list () {
 
   # Convert the text string hammer outputs into a comma separated list of IDs.
   local repository_ids="`echo $baseos_rpms_repo|sed -e 's+^Id: ++'`,`echo $appstream_rpms_repo|sed -e 's+^Id: ++'`"
-  local satellite_rpms_repo=`hammer repository info --name "Red Hat Satellite Client 6 for RHEL ${os_ver} ${arch} RPMs" --organization-id $org_id --fields id --product $product_name`
+  local satellite_rpms_repo=`hammer repository info --name "Red Hat Satellite Client 6 for RHEL ${os_ver} ${arch} RPMs" --organization-id $org_id --fields id --product "$product_name"`
   if [ -z $satellite_rpms_repo ]; then
     echo $repository_ids
     return
@@ -190,7 +192,7 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
     # manifest. If we created the organisation, there won't be a manifest, so there
     # won't be any repositories.
     repo_list=`build_repo_list $tier1_hg_os $org_id x86_64`
-    if [ -z "$repo_list ]; then
+    if [ -z "$repo_list" ]; then
       repo_param=""
     else
       repo_param="--repository-ids ${repo_list}"
@@ -212,22 +214,28 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
     # XXX: Defaults to today. Is this correct?
     hammer content-view filter rule create --content-view-filter-id $cvf_id --content-view-id $cv_os_id --end-date `date -I` --organization-id $org_id --types enhancement,bugfix,security
 
-    # XXX: Do we need to publish a version before we proceed?
+    # XXX: Do we need to publish a version before we proceed? - yes.
+    hammer content-view publish --id $cv_os_id --organization-id $org_id --lifecycle-environments $all_lce_ids
+
+    # And now forcibly promote it to all the LCEs, because we can't associate an LCE if it doesn't have the CV version.
+    for lce_id in ${lce_path_ids[*]}; do
+      hammer content-view version promote --content-view-id $cv_os_id --from-lifecycle-environment-id $lib_lce_id --to-lifecycle-environment-id $lce_id --organization-id $org_id
+    done
   fi
   cv_os_id=`echo $cv_id_str|sed -e 's+^Id: ++'`
 
   # For each operating system, create a hg-OS. LCE at this level is Library.
   # The hg_OS group might already exist in a different organisation, in which
   # case, extend it to our organisation.
-  str_hg_id=`hammer hostgroup info --title hg_$os --fields id`
+  str_hg_id=`hammer hostgroup info --title hg_$tier1_hg_os --fields id`
   if [ -z "$str_hg_id" ]; then
-    hammer hostgroup create --name hg_$os --organization-id $org_id --lifecycle-environment-id $lib_lce_id
-    str_hg_id=`hammer hostgroup info --title hg_$os --fields id`
+    hammer hostgroup create --name hg_$tier1_hg_os --organization-id $org_id --lifecycle-environment-id $lib_lce_id --content-view-id $cv_os_id --location-id $loc_id
+    str_hg_id=`hammer hostgroup info --title hg_$tier1_hg_os --fields id`
   else
-    update_hostgroup hg_$os $org_id $loc_id
+    update_hostgroup hg_$tier1_hg_os $org_id $loc_id
   fi
 
-  parent_name=hg_$os
+  parent_name=hg_$tier1_hg_os
 
   # Derive the ID number from the string hammer returned
   hg_os_id=`echo $str_hg_id|sed -e 's+^Id: ++'`
