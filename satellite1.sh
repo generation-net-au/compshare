@@ -174,7 +174,7 @@ function build_repo_list () {
   # Convert the text string hammer outputs into a comma separated list of IDs.
   local repository_ids="`echo $baseos_rpms_repo|sed -e 's+^Id: ++'`,`echo $appstream_rpms_repo|sed -e 's+^Id: ++'`"
   local satellite_rpms_repo=`hammer repository info --name "Red Hat Satellite Client 6 for RHEL ${os_ver} ${arch} RPMs" --organization-id $org_id --fields id --product "$product_name"`
-  if [ -z $satellite_rpms_repo ]; then
+  if [ -z "$satellite_rpms_repo" ]; then
     echo $repository_ids
     return
   fi
