@@ -1,0 +1,60 @@
+# os_ver, arch, organisation_id
+
+  - name: Get the base OS RPMs repository ID
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - --output
+        - json
+        - repository
+        - info
+        - --name
+        - "Red Hat Enterprise Linux {{ os_ver }} for {{ arch }} - BaseOS RPMs {{ os_ver }}"
+        - --organization-id
+        - {{ organisation_id }}
+        - --product
+        - "Red Hat Enterprise Linux for {{ arch }}"
+    become: yes
+    register: base_os_repo_data
+    base_os_repo_id: {{ base_os_repo_data.stdout | community.general.json_query('Id') }}
+
+
+  - name: Get the AppStream RPMs repository ID
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - --output
+        - json
+        - repository
+        - info
+        - --name
+        - "Red Hat Enterprise Linux {{ os_ver }} for {{ arch }} - AppStream RPMs {{ os_ver }}"
+        - --organization-id
+        - {{ organisation_id }}
+        - --product
+        - "Red Hat Enterprise Linux for {{ arch }}"
+    become: yes
+    register: appstream_repo_data
+    appstream_repo_id: {{ appstream_repo_data.stdout | community.general.json_query('Id') }}
+
+  - name: Get the Satellite client repository ID
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - --output
+        - json
+        - repository
+        - info
+        - --name
+        - "Red Hat Satellite Client 6 for RHEL {{ os_ver }} {{ arch }} RPMs"
+        - --organization-id
+        - {{ organisation_id }}
+        - --product
+        - "Red Hat Enterprise Linux for {{ arch }}"
+    become: yes
+    register: sat_repo_data
+    sat_repo_id: {{ sat_repo_data.stdout | community.general.json_query('Id') }}
+
