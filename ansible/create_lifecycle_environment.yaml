@@ -1,0 +1,38 @@
+
+  - name: Get the Satellite lifecycle environment ID
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - --output
+        - json
+        - lifecycle-environment
+        - info
+        - --name
+        - {{ lifecycle_env_name }}
+        - --organization-id
+        - {{ organisation_id }}
+    become: yes
+    register: lifecycle_env_data
+
+  - name: Create the Satellite lifecycle environment
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - --output
+        - json
+        - lifecycle-environment
+        - create
+        - --name
+        - {{ lifecycle_env_name }}
+        - --organization-id
+        - {{ organisation_id }}
+        - --prior-id
+        - {{ prior_lce_id }}
+    become: yes
+    register: lifecycle_env_data
+    when: lifecycle_env_data.rc != 0
+
+  - name: Register the new lifecycle environment ID
+    lifecycle_env_id: {{ lifecycle_end_data.stdout | community.general.json_query('Id') }}
