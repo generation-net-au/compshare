@@ -245,7 +245,8 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
     id=`hammer hostgroup info --title $parent_name/hg_$tier2_hg_loc --fields id`
     if [ -z "$id" ]; then
       # Once again, lifecycle environment is Library at this level.
-      hammer hostgroup create --name hg_$tier2_hg_loc --content-view-id $cv_os_id --lifecycle-environment-id $lib_lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_os_id
+      # We don't specify a content view, so it will inherit it from the higher level.
+      hammer hostgroup create --name hg_$tier2_hg_loc --lifecycle-environment-id $lib_lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_os_id
       id=`hammer hostgroup info --title $parent_name/hg_$tier2_hg_loc --fields id`
     else
       update_hostgroup $parent_name/hg_$tier2_hg_loc $org_id $loc_id
@@ -267,7 +268,8 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
       
       id=`hammer hostgroup info --title $loc_parent_name/$tier3_hg_name --fields id`
       if [ -z "$id" ]; then
-        hammer hostgroup create --name $tier3_hg_name --content-view-id $cv_os_id --lifecycle-environment-id $lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_loc_id
+        # We don't specify a content view, so it will inherit it from the higher level.
+        hammer hostgroup create --name $tier3_hg_name --lifecycle-environment-id $lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_loc_id
       else
         update_hostgroup $loc_parent_name/$tier3_hg_name $org_id $loc_id
       fi
