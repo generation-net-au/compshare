@@ -1,0 +1,42 @@
+  - name: Get current host group organisation list and location list
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - --output
+        - json
+        - hostgroup
+        - info
+        - --title
+        - {{ hostgroup }}
+    become: yes
+    register: hostgroup_data
+    hostgroup_ids: {{ hostgroup_data.stdout | community.general.json_query('Organizations[*].Id') }}
+    location_ids: {{ hostgroup_data.stdout | community.general.json_query('Locations[*].Id') }}
+
+  - name: Add organisation to list
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - hostgroup
+        - update
+        - --title
+        - {{ hostgroup }}
+        - --organization-ids
+        - {{ hostgroup_ids | join(",") ~ "," ~ {{ organisation_id }} }}
+    when: {{ organisation_id }} is not in hostgroup_ids
+
+  - name: Add location to list
+    hosts: satellite
+    ansible.builtin.command:
+      argv:
+        - /usr/bin/hammer
+        - hostgroup
+        - update
+        - --title
+        - {{ hostgroup }}
+        - --location-ids
+        - {{ location_ids | join (",") ~ "," ~ {{ location_id }} }}
+
+    when: {{ location_id }} is not in location_ids
