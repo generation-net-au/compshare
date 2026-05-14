@@ -1,0 +1,62 @@
+# Create a single tier 2 hostgroup. Calls out to a tier 3 YAML
+# to do that bit as part of the loop. Expected to be called as
+# part of a loop in the tier 1 hostgroup creation.
+  - name: Find or create tier 2 hostgroup
+    block:
+      - name: Get hostgroup info
+        hosts: satellite
+        ansible.builtin.command:
+          argv:
+            - /usr/bin/hammer
+            - --output
+            - json
+            - hostgroup
+            - info
+            - --title
+            - "{{ parent_hg }}/{{ tier2_hg }}"
+        become: yes
+        register: hostgroup_data
+      - name: Update hostgroup
+        # XXX: call out to the update_hostgroup YAML
+    rescue: # The HG doesn't exist.
+      - name: Create hostgroup
+        ansible.builtin.command:
+          argv:
+            - /usr/bin/hammer
+            - --output
+            - json
+            - hostgroup
+            - create
+            - --name
+            - {{ tier2_hg }}
+            - --lifecycle-environment-id
+            - {{ library_lce_id }}
+            - --location-id
+            - {{ location_id }}
+            - --organization-id
+            - {{ organisation_id }}
+            - --parent-id
+            - {{ parent_id }}
+        become: yes
+      - name: Get just created hostgroup info
+        hosts: satellite
+        ansible.builtin.command:
+          argv:
+            - /usr/bin/hammer
+            - --output
+            - json
+            - hostgroup
+            - info
+            - --title
+            - "{{ parent_hg }}/{{ tier2_hg }}"
+        become: yes
+        register: hostgroup_data
+    always:
+      - name: Register parent name and ID
+        tier2_hg_id: {{ hostgroup_data.stdout | community.general.json_query('Id') }}
+        tier2_title: "{{ parent_name }}/{{ tier2_hg }}"
+
+    - name: Create tier 3 sub hostgroups
+      # XXX: Call out to the relevant YAML.
+      loop: {{ tier3_data }} # hg name, lce ID
+
