@@ -1,0 +1,167 @@
+---
+# -----------------------------------------------------------------------------
+# Query the content view from Satellite.
+#
+# This task checks whether the requested content view already exists.
+# -----------------------------------------------------------------------------
+- name: Lookup content view
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - info
+      - --name
+      - "{{ content_view_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  register: content_view_lookup
+  failed_when: false
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Create the content view if it does not already exist.
+#
+# This task creates the content view and associates repositories.
+# -----------------------------------------------------------------------------
+- name: Create content view
+  command:
+    argv:
+      - hammer
+      - content-view
+      - create
+      - --name
+      - "{{ content_view_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --auto-publish
+      - "false"
+      - --repository-ids
+      - "{{ repository_ids }}"
+  when: content_view_lookup.rc != 0
+
+# -----------------------------------------------------------------------------
+# Refresh the content view lookup after creation.
+#
+# This ensures downstream tasks always have the content view ID available.
+# -----------------------------------------------------------------------------
+- name: Refresh content view lookup
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - info
+      - --name
+      - "{{ content_view_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  register: content_view_lookup_final
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Extract the numeric content view ID from hammer output.
+#
+# Hammer outputs human-readable text which requires parsing.
+# -----------------------------------------------------------------------------
+- name: Extract content view ID
+  set_fact:
+    content_view_id: >-
+      {{
+        (
+          content_view_lookup_final.stdout
+          | from_json
+        ).Id
+      }}
+
+- name: Create RPM filter
+  command:
+    argv:
+      - hammer
+      - content-view
+      - filter
+      - create
+      - --content-view-id
+      - "{{ content_view_id }}"
+      - --inclusion
+      - true
+      - --name
+      - filter_noerrata
+      - --organization-id
+      - "{{ organization_id }}"
+      - --original-packages
+      - true
+      - --type
+      - rpm
+  when: content_view_lookup.rc != 0
+
+- name: Create errata filter
+  command:
+    argv:
+      - hammer
+      - content-view
+      - filter
+      - create
+      - --content-view-id
+      - "{{ content_view_id }}"
+      - --inclusion
+      - true
+      - --name
+      - filter_periodically_updates
+      - --organization-id
+      - "{{ organization_id }}"
+      - --type
+      - erratum
+  when: content_view_lookup.rc != 0
+
+- name: Create errata filter rule
+  command:
+    argv:
+      - hammer
+      - content-view
+      - filter
+      - rule
+      - create
+      - --content-view-filter
+      - "filter_periodically_updates"
+      - --content-view-id
+      - "{{ content_view_id }}"
+      - --end-date
+      - ansible_date_time.date
+      - --organization-id
+      - "{{ organization_id }}"
+      - --types
+      - enhancement,bugfix,security
+  when: content_view_lookup.rc != 0
+
+- name: Publish the freshly created content view
+  command:
+    argv:
+      - hammer
+      - content-view
+      - publish
+      - --id
+      - "{{ content_view_id }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  when: content_view_lookup.rc != 0
+
+- name: Promote the newly published version to all lifecycle environments
+  command:
+    argv:
+      - hammer
+      - content-view
+      - version
+      - promote
+      - --content-view-id
+      - "{{ content_view_id }}"
+      - --from-lifecycle-environment
+      - Library
+      - --to-lifecycle-environment
+      - "lce_{{ item }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  loop: "{{ lifecycle_environments }}"
+  when: content_view_lookup.rc != 0

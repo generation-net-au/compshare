@@ -1,0 +1,77 @@
+---
+# -----------------------------------------------------------------------------
+# Query the hostgroup from Satellite.
+#
+# This task determines whether the hierarchical hostgroup already exists.
+# -----------------------------------------------------------------------------
+- name: Lookup hostgroup
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - hostgroup
+      - info
+      - --title
+      - "{{ hostgroup_title }}"
+  register: hostgroup_lookup
+  failed_when: false
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Create the hostgroup if it does not already exist.
+#
+# This task supports both root-level and nested hierarchical hostgroups.
+# -----------------------------------------------------------------------------
+- name: Create hostgroup
+  command:
+    argv:
+      - hammer
+      - hostgroup
+      - create
+      - --name
+      - "{{ hostgroup_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --location-id
+      - "{{ location_id }}"
+      - --lifecycle-environment-id
+      - "{{ lifecycle_environment_id }}"
+      - --content-view-id
+      - "{{ content_view_id }}"
+      - --parent-id
+      - "{{ parent_hostgroup_id | default('') }}"
+  when: hostgroup_lookup.rc != 0
+
+# -----------------------------------------------------------------------------
+# Refresh the hostgroup lookup after creation.
+#
+# This ensures downstream orchestration has access to the hostgroup ID.
+# -----------------------------------------------------------------------------
+- name: Refresh hostgroup lookup
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - hostgroup
+      - info
+      - --title
+      - "{{ hostgroup_title }}"
+  register: hostgroup_lookup_final
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Extract the numeric hostgroup ID from hammer output.
+#
+# Hammer returns human-readable text that must be parsed.
+# -----------------------------------------------------------------------------
+- name: Extract hostgroup ID
+  set_fact:
+    hostgroup_id: >-
+      {{
+        (
+          hostgroup_lookup_final.stdout
+          | from_json
+        ).Id
+      }}

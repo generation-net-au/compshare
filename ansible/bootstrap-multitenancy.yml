@@ -1,0 +1,168 @@
+---
+- name: Bootstrap Satellite multi-tenancy
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    demo: false
+
+    org_name: sjl_t10
+
+    main_location_name: G8NET
+
+    offered_os:
+      - rhel8
+      - rhel9
+      - rhel10
+
+    tenant_locations:
+      - loc1
+      - loc2
+      - loc3
+
+    promotion_paths:
+      - canary
+      - test
+      - prod
+      - dev
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # Ensure the organization exists.
+    #
+    # This reproduces the organization initialization logic from the original
+    # shell script.
+    # -------------------------------------------------------------------------
+    - name: Ensure organization exists
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: organization_ensure.yml
+
+    # -------------------------------------------------------------------------
+    # Ensure the primary location exists.
+    #
+    # This reproduces the location initialization logic from the shell script.
+    # -------------------------------------------------------------------------
+    - name: Ensure main location exists
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: location_ensure.yml
+      vars:
+        location_name: "{{ main_location_name }}"
+
+    # -------------------------------------------------------------------------
+    # Create the infrastructure lifecycle environment.
+    #
+    # This reproduces the dedicated infrastructure branch.
+    # -------------------------------------------------------------------------
+    - name: Ensure infrastructure lifecycle environment exists
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: lifecycle_environment_ensure.yml
+      vars:
+        lifecycle_environment_name: lce_infra
+        prior_lifecycle_environment_name: Library
+
+    # -------------------------------------------------------------------------
+    # Create sequential lifecycle environments forming a promotion chain.
+    #
+    # This creates:
+    #   Library -> lce_canary -> lce_test -> lce_prod -> lce_dev
+    #
+    # Each iteration uses the previous lifecycle environment as its parent.
+    # -------------------------------------------------------------------------
+    - name: Ensure promotion lifecycle environments exist
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: lifecycle_environment_ensure.yml
+      vars:
+        lifecycle_environment_name: "lce_{{ item }}"
+    
+        prior_lifecycle_environment_name: >-
+          {{
+            'Library'
+            if promotion_index == 0
+            else 'lce_' ~ promotion_paths[promotion_index - 1]
+          }}
+    
+      loop: "{{ promotion_paths }}"
+      loop_control:
+        index_var: promotion_index
+
+    # -------------------------------------------------------------------------
+    # Create operating system content views.
+    #
+    # Examples:
+    #   cv_rhel8
+    #   cv_rhel9
+    #   cv_rhel10
+    # -------------------------------------------------------------------------
+    - name: Ensure operating system content views exist
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: content_view_ensure.yml
+      vars:
+        content_view_name: "cv_{{ item }}"
+        lifecycle_environments: "{{ promotion_paths }}"
+        repository_ids: ""
+      loop: "{{ offered_os }}"
+
+    # -------------------------------------------------------------------------
+    # Create tier-1 operating system hostgroups.
+    #
+    # Examples:
+    #   hg_rhel8
+    #   hg_rhel9
+    # -------------------------------------------------------------------------
+    - name: Ensure tier-1 operating system hostgroups exist
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: hostgroup_ensure.yml
+      vars:
+        hostgroup_name: "hg_{{ item }}"
+        hostgroup_title: "hg_{{ item }}"
+        location_name: "{{ main_location_name }}"
+        lifecycle_environment_name: Library
+        content_view_name: "cv_{{ item }}"
+      loop: "{{ offered_os }}"
+
+    # -------------------------------------------------------------------------
+    # Create tier-2 location hostgroups.
+    #
+    # Examples:
+    #   hg_rhel9/hg_loc1
+    #   hg_rhel9/hg_loc2
+    # -------------------------------------------------------------------------
+    - name: Ensure tier-2 location hostgroups exist
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: hostgroup_ensure.yml
+      vars:
+        hostgroup_name: "hg_{{ item.1 }}"
+        hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}"
+        parent_hostgroup_title: "hg_{{ item.0 }}"
+        location_name: "{{ main_location_name }}"
+        lifecycle_environment_name: Library
+        content_view_name: "cv_{{ item.0 }}"
+      loop: "{{ offered_os | product(tenant_locations) | list }}"
+
+    # -------------------------------------------------------------------------
+    # Create tier-3 promotion-path hostgroups.
+    #
+    # Examples:
+    #   hg_rhel9/hg_loc1/hg_canary
+    #   hg_rhel9/hg_loc1/hg_prod
+    # -------------------------------------------------------------------------
+    - name: Ensure tier-3 promotion-path hostgroups exist
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: hostgroup_ensure.yml
+      vars:
+        hostgroup_name: "hg_{{ item.2 }}"
+        hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}/hg_{{ item.2 }}"
+        parent_hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}"
+        location_name: "{{ main_location_name }}"
+        lifecycle_environment_name: "lce_{{ item.2 }}"
+        content_view_name: "cv_{{ item.0 }}"
+      loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"

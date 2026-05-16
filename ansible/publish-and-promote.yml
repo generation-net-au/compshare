@@ -1,0 +1,43 @@
+---
+- name: Publish and promote content views
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    demo: false
+
+    org_name: sjl_test
+
+    promote_to_env: canary
+
+    operating_systems:
+      - rhel9
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # Publish operating system content views.
+    #
+    # This reproduces the publication workflow from the original shell script.
+    # -------------------------------------------------------------------------
+    - name: Publish content views
+      import_role:
+        name: sat-mt-hammer
+        tasks_from: content_view_publish.yml
+      vars:
+        content_view_name: "cv_{{ item }}"
+      loop: "{{ operating_systems }}"
+
+    # -------------------------------------------------------------------------
+    # Promote operating system content views.
+    #
+    # This reproduces lifecycle promotion behavior from the original script.
+    # -------------------------------------------------------------------------
+    - name: Promote content views
+      import_role:
+        name: sat-mt-hammer
+        tasks_from: content_view_promote.yml
+      vars:
+        content_view_name: "cv_{{ item }}"
+        lifecycle_environment_name: "lce_{{ promote_to_env }}"
+      loop: "{{ operating_systems }}"

@@ -1,0 +1,67 @@
+---
+# -----------------------------------------------------------------------------
+# Query the location from Satellite.
+#
+# This task checks whether the requested location already exists.
+# -----------------------------------------------------------------------------
+- name: Lookup location
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - location
+      - info
+      - --name
+      - "{{ location_name }}"
+  register: location_lookup
+  failed_when: false
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Create the location if absent.
+#
+# This task implements idempotent location creation.
+# -----------------------------------------------------------------------------
+- name: Create location
+  command:
+    argv:
+      - hammer
+      - location
+      - create
+      - --name
+      - "{{ location_name }}"
+  when: location_lookup.rc != 0
+
+# -----------------------------------------------------------------------------
+# Refresh the location lookup after possible creation.
+#
+# This ensures downstream tasks always have a valid location ID.
+# -----------------------------------------------------------------------------
+- name: Refresh location lookup
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - location
+      - info
+      - --name
+      - "{{ location_name }}"
+  register: location_lookup_final
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Extract the numeric location ID from hammer output.
+#
+# Hammer returns a human-readable format that must be parsed.
+# -----------------------------------------------------------------------------
+- name: Extract location ID
+  set_fact:
+    location_id: >-
+      {{
+        (
+          location_lookup_final.stdout
+          | from_json
+        ).Id
+      }}

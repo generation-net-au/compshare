@@ -1,0 +1,68 @@
+---
+# -----------------------------------------------------------------------------
+# Query the organization from Satellite.
+#
+# This task determines whether the organization already exists and retrieves
+# its ID.
+# -----------------------------------------------------------------------------
+- name: Lookup organization
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - organization
+      - info
+      - --name
+      - "{{ org_name }}"
+  register: organization_lookup
+  failed_when: false
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Create the organization if it does not already exist.
+#
+# This task implements standard idempotent object creation behavior.
+# -----------------------------------------------------------------------------
+- name: Create organization
+  command:
+    argv:
+      - hammer
+      - organization
+      - create
+      - --name
+      - "{{ org_name }}"
+  when: organization_lookup.rc != 0
+
+# -----------------------------------------------------------------------------
+# Retrieve the organization ID after creation or validation.
+#
+# This task ensures downstream orchestration always has a usable ID value.
+# -----------------------------------------------------------------------------
+- name: Refresh organization lookup
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - organization
+      - info
+      - --name
+      - "{{ org_name }}"
+  register: organization_lookup_final
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Extract the numeric organization ID from hammer output.
+#
+# Hammer returns human-readable text, so the numeric component is parsed out.
+# -----------------------------------------------------------------------------
+- name: Extract organization ID
+  set_fact:
+    organization_id: >-
+      {{
+        (
+          organization_lookup_final.stdout
+          | from_json
+        ).Id
+      }}

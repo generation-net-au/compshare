@@ -1,0 +1,21 @@
+---
+# -----------------------------------------------------------------------------
+# Promote a content view version.
+#
+# This task advances content through the lifecycle environment chain.
+# -----------------------------------------------------------------------------
+- name: Promote content view version
+  command:
+    argv:
+      - hammer
+      - content-view
+      - version
+      - promote
+      - --content-view-id
+      - "{{ content_view_id }}"
+      - --id
+      - "{{ content_view_version_id }}"
+      - --to-lifecycle-environment
+      - "{{ lifecycle_environment_name }}"
+      - --organization-id
+      - "{{ organization_id }}"

@@ -1,0 +1,75 @@
+---
+# -----------------------------------------------------------------------------
+# Query the lifecycle environment from Satellite.
+#
+# This task checks whether the requested lifecycle environment exists.
+# -----------------------------------------------------------------------------
+- name: Lookup lifecycle environment
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - lifecycle-environment
+      - info
+      - --name
+      - "{{ lifecycle_environment_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  register: lifecycle_environment_lookup
+  failed_when: false
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Create the lifecycle environment if it does not exist.
+#
+# This task links the lifecycle environment into the promotion chain.
+# -----------------------------------------------------------------------------
+- name: Create lifecycle environment
+  command:
+    argv:
+      - hammer
+      - lifecycle-environment
+      - create
+      - --name
+      - "{{ lifecycle_environment_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --prior
+      - "{{ prior_lifecycle_environment_name }}"
+  when: lifecycle_environment_lookup.rc != 0
+
+# -----------------------------------------------------------------------------
+# Refresh lifecycle environment lookup after creation.
+#
+# This ensures the environment ID is always available for later tasks.
+# -----------------------------------------------------------------------------
+- name: Refresh lifecycle environment lookup
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - lifecycle-environment
+      - info
+      - --name
+      - "{{ lifecycle_environment_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  register: lifecycle_environment_lookup_final
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Extract the numeric lifecycle environment ID from hammer output.
+#
+# Hammer returns formatted text that requires parsing.
+# -----------------------------------------------------------------------------
+- name: Extract lifecycle environment ID
+  set_fact:
+    lifecycle_environment_id: >-
+      {{
+        (
+          lifecycle_environment_lookup_final.stdout
+          | from_json
+        ).Id
+      }}

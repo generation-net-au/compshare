@@ -1,0 +1,20 @@
+---
+# -----------------------------------------------------------------------------
+# Update the filter rule end date.
+#
+# This task refreshes the errata inclusion cutoff prior to publishing.
+# -----------------------------------------------------------------------------
+- name: Update filter rule
+  command:
+    argv:
+      - hammer
+      - content-view
+      - filter
+      - rule
+      - update
+      - --content-view-filter-id
+      - "{{ filter_id }}"
+      - --id
+      - "{{ rule_id }}"
+      - --end-date
+      - "{{ current_date }}"

@@ -1,0 +1,11 @@
+---
+# -----------------------------------------------------------------------------
+# This role intentionally performs no automatic orchestration.
+#
+# All business logic, loops and sequencing live in the playbooks.
+# Playbooks invoke individual reusable primitives using:
+#
+#   import_role:
+#     name: sat-mt-hammer
+#     tasks_from: some_task_file.yml
+# -----------------------------------------------------------------------------

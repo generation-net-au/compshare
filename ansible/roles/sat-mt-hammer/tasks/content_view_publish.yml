@@ -1,0 +1,14 @@
+---
+# -----------------------------------------------------------------------------
+# Publish the content view.
+#
+# This task creates a new immutable content view version.
+# -----------------------------------------------------------------------------
+- name: Publish content view
+  command:
+    argv:
+      - hammer
+      - content-view
+      - publish
+      - --id
+      - "{{ content_view_id }}"
