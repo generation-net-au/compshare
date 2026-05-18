@@ -273,7 +273,13 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
       else
         update_hostgroup $loc_parent_name/$tier3_hg_name $org_id $loc_id
       fi
+      # Look for and, if necessary, Create an activation key:
+      # OS, location, environment (lce_X) and content view (cv_rhelX)
+      {
+        hammer activation-key info --name "ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]}" --organization-id ${org_id}
+      } || {
+        hammer activation-key create --name ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]} --lifecycle-environment-id $lce_id --content-view-id ${cv_os_id} --lifecycle-environment-id ${lce_id} --organization-id ${org_id} --unlimited-hosts
+      }
     done
   done
 done
-
