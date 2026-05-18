@@ -1,0 +1,68 @@
+---
+# -----------------------------------------------------------------------------
+# Look for repositories that we can add to the content view.
+# -----------------------------------------------------------------------------
+- name: Lookup base OS RPM repository
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - repository
+      - info
+      - --name
+      - "{{ os_name }} - BaseOS RPMs {{ os_version }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --product
+      - "{{ product_name }}"
+  register: base_os_repo_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Lookup appstream RPM repository
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - repository
+      - info
+      - --name
+      - "{{ os_name }} - AppStream RPMs {{ os_version }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --product
+      - "{{ product_name }}"
+  register: appstream_repo_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Lookup Satellite client repository
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - repository
+      - info
+      - --name
+      - "Red Hat Satellite Client 6 for RHEL {{ os_version }} {{ arch }} RPMs"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --product
+      - "{{ product_name }}"
+  register: satellite_repo_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Extract content view ID
+  set_fact:
+    content_view_id: >-
+      {{
+        (
+          content_view_lookup_final.stdout
+          | from_json
+        ).Id
+      }}
+

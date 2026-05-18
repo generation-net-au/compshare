@@ -1,0 +1,40 @@
+---
+# -----------------------------------------------------------------------------
+# This task creates the activation key if it doesn't already exist.
+# -----------------------------------------------------------------------------
+
+- name: Lookup activation key
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - activation-key
+      - info
+      - --name
+      - "ak_{{ os }}_{{ location }}_{{ promotion_path }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  register: activation_key_lookup
+  failed_when: false
+  changed_when: false
+
+# -----------------------------------------------------------------------------
+# Create the activation key if it does not already exist.
+# -----------------------------------------------------------------------------
+- name: Create activation key
+  command:
+    argv:
+      - hammer
+      - activation-key
+      - create
+      - --name
+      - "ak_{{ os }}_{{ location }}_{{ promotion_path }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --lifecycle-environment
+      - "{{ lifecycle_environment_name }}"
+      - --content-view
+      - "{{ content_view_name }}"
+      - --unlimited-hosts
+  when: activation_key_lookup.rc != 0

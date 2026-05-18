@@ -6,7 +6,7 @@
   vars:
     demo: false
 
-    org_name: sjl_t10
+    org_name: sjl_test
 
     main_location_name: G8NET
 
@@ -163,6 +163,18 @@
         hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}/hg_{{ item.2 }}"
         parent_hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}"
         location_name: "{{ main_location_name }}"
+        lifecycle_environment_name: "lce_{{ item.2 }}"
+        content_view_name: "cv_{{ item.0 }}"
+      loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"
+
+    - name: Ensure activation keys exist
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: activation_keys_ensure.yml
+      vars:
+        os: "{{ item.0 }}"
+        location: "{{ item.1 }}"
+        promotion_path: "{{ item.2 }}"
         lifecycle_environment_name: "lce_{{ item.2 }}"
         content_view_name: "cv_{{ item.0 }}"
       loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"

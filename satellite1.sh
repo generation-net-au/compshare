@@ -278,7 +278,7 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
       {
         hammer activation-key info --name "ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]}" --organization-id ${org_id}
       } || {
-        hammer activation-key create --name ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]} --lifecycle-environment-id $lce_id --content-view-id ${cv_os_id} --lifecycle-environment-id ${lce_id} --organization-id ${org_id} --unlimited-hosts
+        hammer activation-key create --name ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]} --lifecycle-environment-id $lce_id --content-view-id ${cv_os_id} --organization-id ${org_id} --unlimited-hosts
       }
     done
   done
