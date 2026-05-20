@@ -25,7 +25,7 @@
 #
 # This task creates the content view and associates repositories.
 # -----------------------------------------------------------------------------
-- name: Create content view
+- name: Create content view with repositories
   command:
     argv:
       - hammer
@@ -38,8 +38,22 @@
       - --auto-publish
       - "false"
       - --repository-ids
-      - "{{ repository_ids }}"
-  when: content_view_lookup.rc != 0
+      - "{{ repository_ids | join "," }}"
+  when: (content_view_lookup.rc != 0) and ( {{ repository_ids|length }} > 0)
+
+- name: Create content view without repositories
+  command:
+    argv:
+      - hammer
+      - content-view
+      - create
+      - --name
+      - "{{ content_view_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --auto-publish
+      - "false"
+  when: (content_view_lookup.rc != 0) and ( {{ repository_ids|length }} == 0)
 
 # -----------------------------------------------------------------------------
 # Refresh the content view lookup after creation.

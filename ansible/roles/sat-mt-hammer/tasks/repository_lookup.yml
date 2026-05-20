@@ -20,6 +20,15 @@
   failed_when: false
   changed_when: false
 
+- name: Create empty repository ID list
+  set_fact:
+    repo_list: [ ]
+
+- name: Add base OS RPM repository ID to list
+  set_fact:
+    repo_list: "{{ repo_list }} + [ {{ (base_os_repo_lookup.stdout | from_jason).Id }} ]"
+    when: base_os_repo_lookup.rc == 0
+
 - name: Lookup appstream RPM repository
   command:
     argv:
@@ -37,6 +46,11 @@
   register: appstream_repo_lookup
   failed_when: false
   changed_when: false
+
+- name: Add appstream RPM repository ID to list
+  set_fact:
+    repo_list: "{{ repo_list }} + [ {{ (appstream_repo_lookup.stdout | from_jason).Id }} ]"
+    when: appstream_repo_lookup.rc == 0
 
 - name: Lookup Satellite client repository
   command:
@@ -56,13 +70,7 @@
   failed_when: false
   changed_when: false
 
-- name: Extract content view ID
+- name: Add Satellite client repository ID to list
   set_fact:
-    content_view_id: >-
-      {{
-        (
-          content_view_lookup_final.stdout
-          | from_json
-        ).Id
-      }}
-
+    repo_list: "{{ repo_list }} + [ {{ (satellite_repo_lookup.stdout | from_jason).Id }} ]"
+    when: satellite_repo_lookup.rc == 0

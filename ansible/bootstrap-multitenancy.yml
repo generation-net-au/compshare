@@ -90,6 +90,11 @@
       loop_control:
         index_var: promotion_index
 
+    - name: Retrieve a list of available repository IDs
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: repository_lookup.yml
+        # Sets the repo_list value.
     # -------------------------------------------------------------------------
     # Create operating system content views.
     #
@@ -105,7 +110,7 @@
       vars:
         content_view_name: "cv_{{ item }}"
         lifecycle_environments: "{{ promotion_paths }}"
-        repository_ids: ""
+        repository_ids: "{{ repo_list }}"
       loop: "{{ offered_os }}"
 
     # -------------------------------------------------------------------------
