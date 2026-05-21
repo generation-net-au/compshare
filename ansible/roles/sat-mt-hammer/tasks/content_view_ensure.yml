@@ -20,6 +20,115 @@
   failed_when: false
   changed_when: false
 
+# OS is in the cv: cv_RHELX
+# We need to convert that to "Red Hat Enterprise Linux X for ARCH"
+# We also need os_version (X) as a separate variable.
+- name: Get the RHEL version
+  set_fact:
+    arch: "x86_64"
+    os_version: "{{ content_view_name | regex_replace('cv_rhel', '') }}"
+
+- name: Set the RHEL version
+  set_fact:
+    product_name: "Red Hat Enterprise Linux for {{ arch }}"
+    os_name: "Red Hat Enterprise Linux {{ os_version }} for {{ arch }}"
+# -----------------------------------------------------------------------------
+# Look for repositories that we can add to the content view.
+# -----------------------------------------------------------------------------
+- name: Lookup base OS RPM repository
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - repository
+      - info
+      - --name
+      - "{{ os_name }} - BaseOS RPMs {{ os_version }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --product
+      - "{{ product_name }}"
+  register: base_os_repo_lookup
+  failed_when: false
+  changed_when: false
+  when: (content_view_lookup.rc != 0)
+
+- name: Create empty repository ID list
+  set_fact:
+    repo_list: [ ]
+
+- name: Extract base OS repository ID
+  set_fact:
+    base_os_repo_id: "{{ (base_os_repo_lookup.stdout | from_json).Id }}"
+  when: (content_view_lookup.rc != 0) and (base_os_repo_lookup.rc == 0)
+
+- name: Add base OS RPM repository ID to list
+  set_fact:
+    repo_list: "{{ repo_list + [ base_os_repo_id ] }}"
+  when: (content_view_lookup.rc != 0) and (base_os_repo_lookup.rc == 0)
+
+- name: Lookup appstream RPM repository
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - repository
+      - info
+      - --name
+      - "{{ os_name }} - AppStream RPMs {{ os_version }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --product
+      - "{{ product_name }}"
+  register: appstream_repo_lookup
+  failed_when: false
+  changed_when: false
+  when: (content_view_lookup.rc != 0)
+
+- name: Extract appstream repository ID
+  set_fact:
+    appstream_repo_id: "{{ (appstream_repo_lookup.stdout | from_json).Id }}"
+  when: (content_view_lookup.rc != 0) and (appstream_repo_lookup.rc == 0)
+
+- name: Add appstream RPM repository ID to list
+  set_fact:
+    repo_list: "{{ repo_list + [ appstream_repo_id ] }}"
+  when: (content_view_lookup.rc != 0) and appstream_repo_lookup.rc == 0
+
+- name: Lookup Satellite client repository
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - repository
+      - info
+      - --name
+      - "Red Hat Satellite Client 6 for RHEL {{ os_version }} {{ arch }} RPMs"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --product
+      - "{{ product_name }}"
+  register: satellite_repo_lookup
+  failed_when: false
+  changed_when: false
+  when: (content_view_lookup.rc != 0)
+
+- name: Extract Satellite repository ID
+  set_fact:
+    satellite_repo_id: "{{ (satellite_repo_lookup.stdout | from_json).Id }}"
+  when: (content_view_lookup.rc != 0) and (satellite_repo_lookup.rc == 0)
+
+- name: Add Satellite client repository ID to list
+  set_fact:
+    repo_list: "{{ repo_list  + [ satellite_repo_id ] }}"
+  when: content_view_lookup.rc != 0 and satellite_repo_lookup.rc == 0
+
+- name: Generate the repository string
+  set_fact:
+    repo_string: "{{ repo_list|join(',') }}"
 # -----------------------------------------------------------------------------
 # Create the content view if it does not already exist.
 #
@@ -38,8 +147,8 @@
       - --auto-publish
       - "false"
       - --repository-ids
-      - "{{ repository_ids | join "," }}"
-  when: (content_view_lookup.rc != 0) and ( {{ repository_ids|length }} > 0)
+      - "{{ repo_string }}"
+  when: (content_view_lookup.rc != 0) and ( repo_list != [] )
 
 - name: Create content view without repositories
   command:
@@ -53,7 +162,7 @@
       - "{{ organization_id }}"
       - --auto-publish
       - "false"
-  when: (content_view_lookup.rc != 0) and ( {{ repository_ids|length }} == 0)
+  when: (content_view_lookup.rc != 0) and ( repo_list == [] )
 
 # -----------------------------------------------------------------------------
 # Refresh the content view lookup after creation.
@@ -174,8 +283,10 @@
       - --from-lifecycle-environment
       - Library
       - --to-lifecycle-environment
-      - "lce_{{ item }}"
+      - "lce_{{ lce }}"
       - --organization-id
       - "{{ organization_id }}"
   loop: "{{ lifecycle_environments }}"
+  loop_control:
+    loop_var: lce
   when: content_view_lookup.rc != 0

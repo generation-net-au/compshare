@@ -6,7 +6,7 @@
   vars:
     demo: false
 
-    org_name: sjl_test
+    org_name: sjl_t4
 
     main_location_name: G8NET
 
@@ -90,11 +90,6 @@
       loop_control:
         index_var: promotion_index
 
-    - name: Retrieve a list of available repository IDs
-      include_role:
-        name: sat-mt-hammer
-        tasks_from: repository_lookup.yml
-        # Sets the repo_list value.
     # -------------------------------------------------------------------------
     # Create operating system content views.
     #
