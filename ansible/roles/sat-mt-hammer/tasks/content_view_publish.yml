@@ -4,6 +4,98 @@
 #
 # This task creates a new immutable content view version.
 # -----------------------------------------------------------------------------
+- name: Get the content view information
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - info
+      - --organization-id
+      - "{{ organization_id }}"
+      - --name
+      - "{{ content_view_name }}"
+  register: content_view_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Store the content view ID
+  set_fact:
+    cv_id: "{{ ( content_view_lookup.stdout | from_json ).Id }}"
+
+- name: Get the erratum content filter information
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - filter
+      - list
+      - --content-view-id
+      - "{{ cv_id }}"
+      - --types
+      - erratum
+      - --name
+      - filter_periodically_updates
+  register: erratum_filter_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Store the erratum content filter ID
+  set_fact:
+    content_filter_id: "{{ ( erratum_filter_lookup.stdout | from_json )[0]['Filter ID'] }}"
+
+- name: Retrieve the content filter rules
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - filter
+      - rule
+      - list
+      - --content-view-filter-id
+      - "{{ content_filter_id }}"
+  register: filter_rules_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Debug the stdout
+  debug:
+    var:
+      filter_rules_lookup.stdout|from_json
+
+- name: Store the content filter rule IDs
+  set_fact:
+    content_filter_rule_ids: >-
+      {{
+        (
+          filter_rules_lookup.stdout
+          | from_json
+        ) | map(attribute='Rule ID')|list
+      }}
+
+# It would be cleaner to use ansible_date_time.date here, but that is
+# only set if facts are gathered.
+- name: Update the filter end date on the filter rules
+  command:
+    argv:
+      - hammer
+      - content-view
+      - filter
+      - rule
+      - update
+      - --content-view-filter-id
+      - "{{ content_filter_id }}"
+      - --id
+      - "{{ item }}"
+      - --end-date
+      - "{{ now(fmt='%Y-%m-%d') }}"
+  loop: "{{ content_filter_rule_ids }}"
+
 - name: Publish content view
   command:
     argv:
@@ -11,4 +103,4 @@
       - content-view
       - publish
       - --id
-      - "{{ content_view_id }}"
+      - "{{ cv_id }}"

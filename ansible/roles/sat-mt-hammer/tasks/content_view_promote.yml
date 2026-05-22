@@ -4,6 +4,51 @@
 #
 # This task advances content through the lifecycle environment chain.
 # -----------------------------------------------------------------------------
+- name: Get the content view information
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - info
+      - --organization-id
+      - "{{ organization_id }}"
+      - --name
+      - "{{ content_view_name }}"
+  register: content_view_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Store the content view ID
+  set_fact:
+    cv_id: "{{ ( content_view_lookup.stdout | from_json ).Id }}"
+
+- name: Retrieve the content view versions
+  command:
+    argv:
+      - hammer
+      - --output
+      - json
+      - content-view
+      - version
+      - list
+      - --content-view-id
+      - "{{ cv_id }}"
+  register: content_view_versions_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Store the content view version IDs
+  set_fact:
+    content_view_version_ids: >-
+      {{ ( content_view_versions_lookup.stdout |from_json )|map(attribute='Id')|list }}
+
+- name: Get the maximum version ID
+  set_fact:
+    latest_content_version_id: >-
+      {{ content_view_version_ids | map('int') | max }}
+
 - name: Promote content view version
   command:
     argv:
@@ -12,9 +57,9 @@
       - version
       - promote
       - --content-view-id
-      - "{{ content_view_id }}"
+      - "{{ cv_id }}"
       - --id
-      - "{{ content_view_version_id }}"
+      - "{{ latest_content_version_id }}"
       - --to-lifecycle-environment
       - "{{ lifecycle_environment_name }}"
       - --organization-id

@@ -252,7 +252,7 @@
       - --content-view-id
       - "{{ content_view_id }}"
       - --end-date
-      - ansible_date_time.date
+      - "{{ now(fmt='%Y-%m-%d') }}"
       - --organization-id
       - "{{ organization_id }}"
       - --types
