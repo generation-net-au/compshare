@@ -75,3 +75,6 @@
           | from_json
         ).Id
       }}
+
+- name: Associate activation key
+  when: associate_activation_key
