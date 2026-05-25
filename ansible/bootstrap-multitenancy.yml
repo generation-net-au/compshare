@@ -124,6 +124,7 @@
         location_name: "{{ main_location_name }}"
         lifecycle_environment_name: Library
         content_view_name: "cv_{{ item }}"
+        associate_activation_key: false
       loop: "{{ offered_os }}"
 
     # -------------------------------------------------------------------------
@@ -144,15 +145,29 @@
         location_name: "{{ main_location_name }}"
         lifecycle_environment_name: Library
         content_view_name: "cv_{{ item.0 }}"
+        associate_activation_key: false
       loop: "{{ offered_os | product(tenant_locations) | list }}"
 
+
     # -------------------------------------------------------------------------
-    # Create tier-3 promotion-path hostgroups.
+    # Create activation keys and tier-3 promotion-path hostgroups.
     #
     # Examples:
     #   hg_rhel9/hg_loc1/hg_canary
     #   hg_rhel9/hg_loc1/hg_prod
     # -------------------------------------------------------------------------
+    - name: Ensure activation key "ak_{{ item.0 }}_{{ item.1 }}_{{ item.2 }}" exists
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: activation_keys_ensure.yml
+      vars:
+        os: "{{ item.0 }}"
+        location: "{{ item.1 }}"
+        promotion_path: "{{ item.2 }}"
+        lifecycle_environment_name: "lce_{{ item.2 }}"
+        content_view_name: "cv_{{ item.0 }}"
+      loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"
+
     - name: Ensure tier-3 promotion-path hostgroups exist
       include_role:
         name: sat-mt-hammer
@@ -164,16 +179,6 @@
         location_name: "{{ main_location_name }}"
         lifecycle_environment_name: "lce_{{ item.2 }}"
         content_view_name: "cv_{{ item.0 }}"
+        associate_activation_key: true
       loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"
 
-    - name: Ensure activation keys exist
-      include_role:
-        name: sat-mt-hammer
-        tasks_from: activation_keys_ensure.yml
-      vars:
-        os: "{{ item.0 }}"
-        location: "{{ item.1 }}"
-        promotion_path: "{{ item.2 }}"
-        lifecycle_environment_name: "lce_{{ item.2 }}"
-        content_view_name: "cv_{{ item.0 }}"
-      loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"
