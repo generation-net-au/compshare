@@ -4,8 +4,6 @@
   gather_facts: false
 
   vars:
-    demo: false
-
     org_name: sjl_t2
     do_publish: true
     do_promote: true
