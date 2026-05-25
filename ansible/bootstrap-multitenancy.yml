@@ -105,7 +105,6 @@
       vars:
         content_view_name: "cv_{{ item }}"
         lifecycle_environments: "{{ promotion_paths }}"
-        repository_ids: "{{ repo_list }}"
       loop: "{{ offered_os }}"
 
     # -------------------------------------------------------------------------
