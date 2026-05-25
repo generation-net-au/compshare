@@ -8,7 +8,8 @@
     do_publish: true
     do_promote: true
 
-    promote_to_env: canary
+    promote_to_env:
+      - canary
 
     operating_systems:
       - rhel9
@@ -16,7 +17,7 @@
       - rhel10
 
   tasks:
-    - name: Retrieve the organisation information
+    - name: Retrieve the organisation information by running hammer organization info --name "{{ org_name }}" --output json
       ansible.builtin.command:
         argv:
           - hammer
@@ -63,7 +64,7 @@
         name: sat-mt-hammer
         tasks_from: content_view_promote.yml
       vars:
-        content_view_name: "cv_{{ item }}"
-        lifecycle_environment_name: "lce_{{ promote_to_env }}"
-      loop: "{{ operating_systems }}"
+        content_view_name: "cv_{{ item.0 }}"
+        lifecycle_environment_name: "lce_{{ item.1 }}"
+      loop: "{{ offered_os | product(promote_to_env) | list }}"
       when: do_promote
