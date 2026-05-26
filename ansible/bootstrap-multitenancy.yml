@@ -180,5 +180,8 @@
         lifecycle_environment_name: "lce_{{ item.2 }}"
         content_view_name: "cv_{{ item.0 }}"
         associate_activation_key: true
+        os: "{{ item.0 }}"
+        location: "{{ item.1 }}"
+        lce: "{{ item.2 }}"
       loop: "{{ offered_os | product(tenant_locations, promotion_paths) | list }}"
 

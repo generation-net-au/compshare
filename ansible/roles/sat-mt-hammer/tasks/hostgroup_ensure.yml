@@ -76,5 +76,52 @@
         ).Id
       }}
 
-- name: Associate activation key
+- name: Retrieve current list of activation keys for hostgroup
+  set_fact:
+    activation_key_list: >-
+      {{
+        ( hostgroup_lookup_final.stdout | from_json ).Parameters|selectattr('name', 'eq', 'kt_activation_keys')|map(attribute='value')|list
+      }}
   when: associate_activation_key
+
+# Assumes that the kt_activation_keys parameter can appear only once for a given host group.
+- name: Convert the activation key string to a list
+  set_fact:
+    activation_keys: >-
+      {{ activation_key_list[0].split(',') }}
+  when: associate_activation_key
+
+- name: Build the activation key name
+  set_fact:
+    activation_key: "ak_{{ os }}_{{ location }}_{{ lce }}"
+  when: associate_activation_key
+
+- name: Check if the AK is already associated with the host group
+  set_fact:
+    need_association: true
+  when: associate_activation_key and (activation_key not in activation_keys)
+
+- name: Fallback for the AK association check
+  set_fact:
+    need_association: false
+  when: not associate_activation_key or (activation_key in activation_keys)
+
+- name: Build the new list of activation keys for the hostgroup
+  set_fact:
+    activation_keys: >-
+      {{ activation_keys + [ activation_key ] }}
+  when: need_association
+
+- name: Associate the activation key with the host group
+  command:
+    argv:
+      - hammer
+      - hostgroup
+      - set-parameter
+      - --hostgroup-id
+      - "{{ hostgroup_id }}"
+      - --name
+      - kt_activation_keys
+      - --value
+      - "{{ activation_keys|join(',') }}"
+  when: need_association
