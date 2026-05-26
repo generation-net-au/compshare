@@ -4,9 +4,7 @@
   gather_facts: false
 
   vars:
-    demo: false
-
-    org_name: sjl_t5
+    org_name: sjl_t2
 
     main_location_name: G8NET
 

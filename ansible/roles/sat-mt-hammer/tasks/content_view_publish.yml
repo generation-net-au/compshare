@@ -63,11 +63,6 @@
   failed_when: false
   changed_when: false
 
-- name: Debug the stdout
-  debug:
-    var:
-      filter_rules_lookup.stdout|from_json
-
 - name: Store the content filter rule IDs
   set_fact:
     content_filter_rule_ids: >-

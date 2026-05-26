@@ -89,7 +89,12 @@
   set_fact:
     activation_keys: >-
       {{ activation_key_list[0].split(',') }}
-  when: associate_activation_key
+  when: associate_activation_key and activation_key_list|length > 0
+
+- name: Convert the empty string to an empty list
+  set_fact:
+    activation_keys: [ ]
+  when: associate_activation_key and activation_key_list|length == 0
 
 - name: Build the activation key name
   set_fact:
