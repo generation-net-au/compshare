@@ -35,7 +35,7 @@
     - name: Ensure organization exists
       include_role:
         name: sat-mt-hammer
-        tasks_from: organization_ensure.yml
+        tasks_from: organization_ensure.yaml
 
     # -------------------------------------------------------------------------
     # Ensure the primary location exists.
@@ -45,7 +45,7 @@
     - name: Ensure main location exists
       include_role:
         name: sat-mt-hammer
-        tasks_from: location_ensure.yml
+        tasks_from: location_ensure.yaml
       vars:
         location_name: "{{ main_location_name }}"
 
@@ -57,7 +57,7 @@
     - name: Ensure infrastructure lifecycle environment exists
       include_role:
         name: sat-mt-hammer
-        tasks_from: lifecycle_environment_ensure.yml
+        tasks_from: lifecycle_environment_ensure.yaml
       vars:
         lifecycle_environment_name: lce_infra
         prior_lifecycle_environment_name: Library
@@ -73,7 +73,7 @@
     - name: Ensure promotion lifecycle environments exist
       include_role:
         name: sat-mt-hammer
-        tasks_from: lifecycle_environment_ensure.yml
+        tasks_from: lifecycle_environment_ensure.yaml
       vars:
         lifecycle_environment_name: "lce_{{ item }}"
     
@@ -99,7 +99,7 @@
     - name: Ensure operating system content views exist
       include_role:
         name: sat-mt-hammer
-        tasks_from: content_view_ensure.yml
+        tasks_from: content_view_ensure.yaml
       vars:
         content_view_name: "cv_{{ item }}"
         lifecycle_environments: "{{ promotion_paths }}"
@@ -115,7 +115,7 @@
     - name: Ensure tier-1 operating system hostgroups exist
       include_role:
         name: sat-mt-hammer
-        tasks_from: hostgroup_ensure.yml
+        tasks_from: hostgroup_ensure.yaml
       vars:
         hostgroup_name: "hg_{{ item }}"
         hostgroup_title: "hg_{{ item }}"
@@ -135,7 +135,7 @@
     - name: Ensure tier-2 location hostgroups exist
       include_role:
         name: sat-mt-hammer
-        tasks_from: hostgroup_ensure.yml
+        tasks_from: hostgroup_ensure.yaml
       vars:
         hostgroup_name: "hg_{{ item.1 }}"
         hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}"
@@ -157,7 +157,7 @@
     - name: Ensure activation key "ak_{{ item.0 }}_{{ item.1 }}_{{ item.2 }}" exists
       include_role:
         name: sat-mt-hammer
-        tasks_from: activation_keys_ensure.yml
+        tasks_from: activation_keys_ensure.yaml
       vars:
         os: "{{ item.0 }}"
         location: "{{ item.1 }}"
@@ -169,7 +169,7 @@
     - name: Ensure tier-3 promotion-path hostgroups exist
       include_role:
         name: sat-mt-hammer
-        tasks_from: hostgroup_ensure.yml
+        tasks_from: hostgroup_ensure.yaml
       vars:
         hostgroup_name: "hg_{{ item.2 }}"
         hostgroup_title: "hg_{{ item.0 }}/hg_{{ item.1 }}/hg_{{ item.2 }}"

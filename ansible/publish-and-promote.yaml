@@ -48,7 +48,7 @@
     - name: Publish content views
       include_role:
         name: sat-mt-hammer
-        tasks_from: content_view_publish.yml
+        tasks_from: content_view_publish.yaml
       vars:
         content_view_name: "cv_{{ item }}"
       loop: "{{ operating_systems }}"
@@ -62,7 +62,7 @@
     - name: Promote content views
       include_role:
         name: sat-mt-hammer
-        tasks_from: content_view_promote.yml
+        tasks_from: content_view_promote.yaml
       vars:
         content_view_name: "cv_{{ item.0 }}"
         lifecycle_environment_name: "lce_{{ item.1 }}"

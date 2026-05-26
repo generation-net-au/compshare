@@ -87,8 +87,7 @@
 # Assumes that the kt_activation_keys parameter can appear only once for a given host group.
 - name: Convert the activation key string to a list
   set_fact:
-    activation_keys: >-
-      {{ activation_key_list[0].split(',') }}
+    activation_keys: "{{ activation_key_list[0].split(',') }}"
   when: associate_activation_key and activation_key_list|length > 0
 
 - name: Convert the empty string to an empty list
@@ -130,3 +129,42 @@
       - --value
       - "{{ activation_keys|join(',') }}"
   when: need_association
+
+- name: Check if the host group is already associated with the organisation
+  command:
+    argv:
+      - hammer
+      - hostgroup
+      - info
+      - --id
+      - "{{ hostgroup_id }}"
+      - --organization-id
+      - "{{ organization_id }}"
+  register: hg_org_check
+  failed_when: false
+  changed_when: false
+
+- name: Get the current list of organisations associated with the host group
+  set_fact:
+    organisation_id_list: >-
+      {{
+        ( hostgroup_lookup_final.stdout | from_json ).Organizations|map(attribute='Id')|list
+      }}
+  when: hg_org_check.rc != 0
+
+- name: Add the organisation to the list of organisations
+  set_fact:
+    organisation_id_list: "{{ organisation_id_list + [ organization_id ] }}"
+  when: hg_org_check.rc != 0
+
+- name: Update the host group with the new organisation list
+  command:
+    argv:
+      - hammer
+      - hostgroup
+      - update
+      - --id
+      - "{{ hostgroup_id }}"
+      - --organization-ids
+      - "{{ organisation_id_list|join(',') }}"
+  when: hg_org_check.rc != 0

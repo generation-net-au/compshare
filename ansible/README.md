@@ -25,15 +25,9 @@ When enabled:
 - hammer commands are printed
 - hammer commands are not executed
 
-## Example Demo Usage
-
-ansible-playbook \
-  -i inventory.ini \
-  bootstrap-multitenancy.yml \
-
 ## Example Real Execution
 
 ansible-playbook \
   -i inventory.ini \
-  bootstrap-multitenancy.yml
+  bootstrap-multitenancy.yaml
 
