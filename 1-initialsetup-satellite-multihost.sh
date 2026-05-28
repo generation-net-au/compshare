@@ -287,13 +287,14 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
       # Look for the parameter named kt_activation_keys. This has the comma-separated list of
       # activation keys associated with the host group.
       associated_activation_keys=`hammer --output json hostgroup info --fields parameters --id ${tier_3_hg_id}|jq '.Parameters[]|select(.name == "kt_activation_keys").value'`
-      if [ `echo "$associated_activation_keys"|grep "${ak_name}"` = "" ]; then
+      x=`echo "$associated_activation_keys"|grep "${ak_name}"`
+      if [ "$x" = "" ]; then
         if [ "${associated_activation_keys}" = "" ]; then
           new_aks="${ak_name}"
         else
           new_aks="${associated_activation_keys},${ak_name}"
         fi
-        hammer hostgroup set parameter --hostgroup-id ${tier_3_hg_id} --name kt_activation_keys --value "${new_aks}"
+	hammer hostgroup set-parameter --hostgroup-id ${tier_3_hg_id} --name kt_activation_keys --value "${new_aks}"
       fi
     done
   done
