@@ -88,7 +88,7 @@
       - --id
       - "{{ item }}"
       - --end-date
-      - "{{ now(fmt='%Y-%m-%d') }}"
+      - "{{ end_date | default(now(fmt='%Y-%m-%d')) }}"
   loop: "{{ content_filter_rule_ids }}"
 
 - name: Publish content view

@@ -66,5 +66,5 @@
       vars:
         content_view_name: "cv_{{ item.0 }}"
         lifecycle_environment_name: "lce_{{ item.1 }}"
-      loop: "{{ offered_os | product(promote_to_env) | list }}"
+      loop: "{{ operating_systems | product(promote_to_env) | list }}"
       when: do_promote
