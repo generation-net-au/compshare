@@ -270,16 +270,31 @@ for tier1_hg_os in ${OFFERED_OS[*]}; do
       if [ -z "$id" ]; then
         # We don't specify a content view, so it will inherit it from the higher level.
         hammer hostgroup create --name $tier3_hg_name --lifecycle-environment-id $lce_id --location-id $loc_id --organization-id $org_id --parent-id $hg_loc_id
+        id=`hammer hostgroup info --title $loc_parent_name/$tier3_hg_name --fields id`
       else
         update_hostgroup $loc_parent_name/$tier3_hg_name $org_id $loc_id
       fi
-      # Look for and, if necessary, Create an activation key:
+      # Look for and, if necessary, create an activation key:
       # OS, location, environment (lce_X) and content view (cv_rhelX)
+      ak_name="ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]}"
       {
-        hammer activation-key info --name "ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]}" --organization-id ${org_id}
+        hammer activation-key info --name "${ak_name}" --organization-id ${org_id}
       } || {
-        hammer activation-key create --name ak_${tier1_hg_os}_${tier2_hg_loc}_${PROMOTION_PATHS[$count]} --lifecycle-environment-id $lce_id --content-view-id ${cv_os_id} --organization-id ${org_id} --unlimited-hosts
+        hammer activation-key create --name "${ak_name}" --lifecycle-environment-id $lce_id --content-view-id ${cv_os_id} --organization-id ${org_id} --unlimited-hosts
       }
+      # Associate the activation key with the hostgroup.
+      tier_3_hg_id=`echo $id|sed -e 's+Id: ++'`
+      # Look for the parameter named kt_activation_keys. This has the comma-separated list of
+      # activation keys associated with the host group.
+      associated_activation_keys=`hammer --output json hostgroup info --fields parameters --id ${tier_3_hg_id}|jq '.Parameters[]|select(.name == "kt_activation_keys").value'`
+      if [ `echo "$associated_activation_keys"|grep "${ak_name}"` = "" ]; then
+        if [ "${associated_activation_keys}" = "" ]; then
+          new_aks="${ak_name}"
+        else
+          new_aks="${associated_activation_keys},${ak_name}"
+        fi
+        hammer hostgroup set parameter --hostgroup-id ${tier_3_hg_id} --name kt_activation_keys --value "${new_aks}"
+      fi
     done
   done
 done
