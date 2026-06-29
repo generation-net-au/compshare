@@ -5,6 +5,16 @@
 # This task determines whether the organization already exists and retrieves
 # its ID.
 # -----------------------------------------------------------------------------
+- name: Test hammer
+  shell: |
+    timeout 120 hammer --output json organization info --name "{{ org_name }}"
+  register: hammer_test
+  changed_when: false
+  failed_when: false
+
+- debug:
+    var: hammer_test
+
 - name: Lookup organization
   command:
     argv:
