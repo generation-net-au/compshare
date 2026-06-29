@@ -8,7 +8,7 @@
 - name: Lookup organization
   command:
     argv:
-      -/usr/bin/hammer
+      - /usr/bin/hammer
       - --output
       - json
       - organization
