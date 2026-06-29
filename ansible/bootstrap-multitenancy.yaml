@@ -1,6 +1,6 @@
 ---
 - name: Bootstrap Satellite multi-tenancy
-  hosts: localhost
+  hosts: all
   gather_facts: false
 
   vars:
