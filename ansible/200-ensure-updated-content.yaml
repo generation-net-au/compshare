@@ -67,6 +67,7 @@
       vars:
         product: "{{ item.0 }}"
         repository: "{{ item.1 }}"
+        releasever: "{{ item.2 }}"
       loop: "{{ repositories }}"
 
     # -------------------------------------------------------------------------
