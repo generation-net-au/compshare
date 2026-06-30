@@ -43,3 +43,44 @@
     --product "{{ product }}"
     --name "{{ enabled_repository }}"
   when: do_sync | bool
+
+- name: Lookup content view current repos
+  command: >
+    hammer content-view info --output json --fields "Yum repositories/name"
+    --organization-id "{{ organization_id }}"
+    --name "{{ cv }}"
+  register: content_view_current_repos 
+  changed_when: false
+  # Output captured in content_view_current_repos might look something like this:
+  # Yum Repositories:
+  # 1) Name: Red Hat Satellite Client 6 for RHEL 9 x86_64 RPMs
+  # 2) Name: Red Hat Enterprise Linux 9 for x86_64 - BaseOS RPMs 9
+  # 3) Name: Red Hat Enterprise Linux 9 for x86_64 - AppStream RPMs 9
+
+- name: Determine if Repo Needs to be Added to Content View
+  set_fact:
+    # This creates a simple boolean we use to drive subsequent behavior
+    repo_already_present: "{{ repository in content_view_current_repos.stdout }}"
+
+- name: Lookup repository for its ID
+  command: >
+    hammer repository info --output json
+    --organization-id "{{ organization_id }}"
+    --product "{{ product }}"
+    --name "{{ enabled_repository }}"
+  register: repoid_lookup 
+  when: not repo_already_present
+
+- name: Extract repository ID
+  set_fact:
+    repo_id: "{{ (repoid_lookup.stdout | from_json).Id }}"
+  when: not repo_already_present
+
+- name: Ensure our repo is set in the Content View
+  command: >
+    hammer content-view add-repository 
+    --name "{{ cv }}"
+    --organization-id "{{ organization_id }}"
+    --repository-id "{{ repo_id }}"
+  when: not repo_already_present
+
