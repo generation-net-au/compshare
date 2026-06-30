@@ -47,7 +47,7 @@
 # Set the repo name into enabled_repository from previous query for Red Hat Products or from the reposet name for EPEL
 - name: Extract enabled repository name or for non-RH Repos like EPEL use reposet as the repository
   set_fact:
-    enabled_repository: "{{ repo_set_with_reponame.stdout | regex_findall('(?m)^\\s*Name:\\s*(.+)$') | last | default(repository) }}"
+    enabled_repository: "{{ (repo_set_with_reponame.stdout | default('')) | regex_findall('(?m)^\\s*Name:\\s*(.+)$') | last | default(repository) }}"
 
 - name: Synchronize repository
   command: >
