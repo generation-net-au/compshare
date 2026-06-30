@@ -40,7 +40,7 @@
 
       {%- endfor -%}
 
-  {{ repos }}
+      {{ repos }}
 
   tasks:
     - name: Retrieve the organisation information by running hammer organization info --name "{{ org_name }}" --output json
