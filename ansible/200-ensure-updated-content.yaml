@@ -27,7 +27,7 @@
          ]) -%}
       {%- set _ = repos.append([
             "Red Hat Enterprise Linux for x86_64",
-            "Red Hat Satellite Client 6 for RHEL " ~ v ~ " x86_64 RPMs",
+            "Red Hat Satellite Client 6 for RHEL " ~ v ~ " x86_64 (RPMs)",
             v
           ]) -%}
       {%- endfor -%}
