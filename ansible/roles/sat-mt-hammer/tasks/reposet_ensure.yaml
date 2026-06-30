@@ -23,21 +23,20 @@
   register: enable_result
   when: not repo_enabled 
 
-- name: Re-query repository set after enabling to capture repository name
+- name: Re-query repository set to capture repo name
   command: >
     hammer repository-set show
     --organization-id "{{ organization_id }}"
     --product "{{ product }}"
     --name "{{ repository }}"
-  register: repo_set
+  register: repo_set_with_reponame
   changed_when: false
-  when: enable_result is changed
 
 - name: Extract enabled repository name
   set_fact:
     enabled_repository: >-
       {{
-        repo_set.stdout
+        repo_set_with_reponame.stdout
         | regex_search('(?ms)Enabled Repositories:.*?Name:\\s*(.+)$', '\1')
         | first
       }}
