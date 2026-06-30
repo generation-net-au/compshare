@@ -20,9 +20,32 @@
 
 # -----------------------------------------------------------------------------
 # Create the hostgroup if it does not already exist.
-#
-# This task supports both root-level and nested hierarchical hostgroups.
+# This task pair supports both root-level and nested hierarchical hostgroups.
+# Two variations of doing this, the first will run if this is a tier-1 hostgroup
+# with no parent, the second if a parent was passed in for tier-2 etc. 
+# They never both run.
 # -----------------------------------------------------------------------------
+
+- name: Create hostgroup
+  command:
+    argv:
+      - hammer
+      - hostgroup
+      - create
+      - --name
+      - "{{ hostgroup_name }}"
+      - --organization-id
+      - "{{ organization_id }}"
+      - --location-id
+      - "{{ location_id }}"
+      - --lifecycle-environment-id
+      - "{{ lifecycle_environment_id }}"
+      - --content-view-id
+      - "{{ content_view_id }}"
+  when:
+      - hostgroup_lookup.rc != 0
+      - parent_hostgroup_title is not defined
+      
 - name: Create hostgroup
   command:
     argv:
@@ -41,7 +64,9 @@
       - "{{ content_view_id }}"
       - --parent-title
       - "{{ parent_hostgroup_title | default('') }}"
-  when: hostgroup_lookup.rc != 0
+  when:
+      - hostgroup_lookup.rc != 0
+      - parent_hostgroup_title is defined
 
 # -----------------------------------------------------------------------------
 # Refresh the hostgroup lookup after creation.
