@@ -61,7 +61,7 @@
     - name: Ensure Enabled Repository Set
       include_role:
         name: sat-mt-hammer
-        tasks_from: ensure_repository_set.yaml
+        tasks_from: reposet_ensure.yaml
       vars:
         product: "{{ item.0 }}"
         repository: "{{ item.1 }}"
