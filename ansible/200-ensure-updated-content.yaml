@@ -11,24 +11,24 @@
 
     do_sync: true
 
-  repositories: >-
-    {%- set repos = [] -%}
-    {%- for os in operating_systems -%}
-    {%- set v = os | regex_replace('^rhel', '') -%}
-    {%- set _ = repos.append([
-          "Red Hat Enterprise Linux for x86_64",
-          "Red Hat Enterprise Linux " ~ v ~ " for x86_64 - AppStream (RPMs)"
-        ]) -%}
-    {%- set _ = repos.append([
-          "Red Hat Enterprise Linux for x86_64",
-          "Red Hat Enterprise Linux " ~ v ~ " for x86_64 - BaseOS (RPMs)"
-        ]) -%}
-    {%- set _ = repos.append([
-          "Red Hat Enterprise Linux for x86_64",
-          "Red Hat Satellite Client 6 for RHEL " ~ v ~ " x86_64 RPMs"
-        ]) -%}
-    {%- endfor -%}
-    {{ repos }}
+    repositories: >-
+      {%- set repos = [] -%}
+      {%- for os in operating_systems -%}
+      {%- set v = os | regex_replace('^rhel', '') -%}
+      {%- set _ = repos.append([
+            "Red Hat Enterprise Linux for x86_64",
+            "Red Hat Enterprise Linux " ~ v ~ " for x86_64 - AppStream (RPMs)"
+          ]) -%}
+      {%- set _ = repos.append([
+            "Red Hat Enterprise Linux for x86_64",
+            "Red Hat Enterprise Linux " ~ v ~ " for x86_64 - BaseOS (RPMs)"
+          ]) -%}
+      {%- set _ = repos.append([
+            "Red Hat Enterprise Linux for x86_64",
+            "Red Hat Satellite Client 6 for RHEL " ~ v ~ " x86_64 RPMs"
+          ]) -%}
+      {%- endfor -%}
+      {{ repos }}
 
   tasks:
     - name: Retrieve the organisation information by running hammer organization info --name "{{ org_name }}" --output json
