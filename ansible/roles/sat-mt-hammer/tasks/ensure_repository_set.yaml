@@ -1,0 +1,47 @@
+---
+- name: Query repository set
+  command: >
+    hammer repository-set show
+    --organization "{{ organization }}"
+    --product "{{ product }}"
+    --name "{{ repository }}"
+  register: repo_set
+  changed_when: false
+
+- name: Enable repository set if not already enabled
+  command: >
+    hammer repository-set enable
+    --organization "{{ organization }}"
+    --product "{{ product }}"
+    --basearch x86_64
+    --releasever {{ releasever }}
+    --name "{{ repository }}"
+  register: enable_result
+  when: repo_set.stdout is search('Enabled Repositories:\\s*$')
+
+- name: Re-query repository set after enabling to capture repository name
+  command: >
+    hammer repository-set show
+    --organization "{{ organization }}"
+    --product "{{ product }}"
+    --name "{{ repository }}"
+  register: repo_set
+  changed_when: false
+  when: enable_result is changed
+
+- name: Extract enabled repository name
+  set_fact:
+    enabled_repository: >-
+      {{
+        repo_set.stdout
+        | regex_search('(?ms)Enabled Repositories:.*?Name:\\s*(.+)$', '\1')
+        | first
+      }}
+
+- name: Synchronize repository
+  command: >
+    hammer repository synchronize
+    --organization "{{ organization }}"
+    --product "{{ product }}"
+    --name "{{ enabled_repository }}"
+  when: do_sync | bool

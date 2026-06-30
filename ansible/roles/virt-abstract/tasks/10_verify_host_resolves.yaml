@@ -1,0 +1,37 @@
+---
+# Verify that the hostname can be resolved before
+# attempting any virtualization operations.
+
+- name: Resolve hostname
+  ansible.builtin.command:
+    argv:
+      - getent
+      - ahostsv4
+      - "{{ host }}"
+  register: host_lookup
+  changed_when: false
+
+- name: Display lookup result
+  ansible.builtin.debug:
+    var: host_lookup
+
+- name: Fail if hostname cannot be resolved
+  ansible.builtin.fail:
+    msg: |
+      Unable to resolve host:
+
+        {{ host }}
+
+      Verify DNS, /etc/hosts, inventory configuration,
+      and network connectivity.
+  when: host_lookup.rc != 0
+
+- name: Store host IP address
+  ansible.builtin.set_fact:
+    host_ip: "{{ host_lookup.stdout_lines[0].split()[0] }}"
+
+- name: Display host resolution summary
+  ansible.builtin.debug:
+    msg:
+      - "Hypervisor: {{ host }}"
+      - "Resolved IP: {{ host_ip }}"

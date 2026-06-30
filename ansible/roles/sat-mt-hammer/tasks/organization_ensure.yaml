@@ -5,7 +5,6 @@
 # This task determines whether the organization already exists and retrieves
 # its ID.
 # -----------------------------------------------------------------------------
-
 - name: Lookup organization
   command:
     argv:

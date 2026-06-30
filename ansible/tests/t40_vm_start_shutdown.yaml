@@ -1,0 +1,162 @@
+---
+- name: TEST 11_verify_hypervisor_responsding
+  hosts: localhost
+  gather_facts: false
+  vars:
+    host_working: "v2c5"
+    vm_that_starts_off: "t1c2"
+    overall_failed: false
+  tasks:
+    - name: SETUP1 Define delegation hosts dynamically setting python3 to be used for the RHEL8 ones
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        ansible_python_interpreter: /usr/bin/python3.9
+      loop:
+        - "{{ host_working }}"
+
+    - name: SETUP2 Verify python correctly set on the working host
+      debug:
+        var: hostvars[item]
+      loop:
+        - "{{ host_working }}"
+
+    - name: SETUP3 Ensure VM is actually off as a starting point
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_starts_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 42_vm_poweroff.yaml
+        - debug:
+            msg: "Done"
+      rescue:
+        - debug:
+            msg: "Done"
+
+    - name: Abort if starting point is not right
+      ansible.builtin.fail:
+        msg: "VM in desired state not found"
+      when:
+        - virt_output.status != "shutdown"
+
+    - name: TEST1 Verify 40_vm_start behavior applied to an off VM
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: T1 call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_starts_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 40_vm_start.yaml
+        - name: T1 fail test on unexpected output
+          ansible.builtin.fail:
+          when:
+            - virt_output.status != "running"
+        - name: Mark TEST1 as Passed
+          ansible.builtin.set_fact:
+            test1_status: "PASSED"
+      rescue:
+        - name: T1R1 Mark TEST1 as Failed if failed criteria met
+          ansible.builtin.set_fact:
+            test1_status: "FAILED"
+            overall_failed: true
+
+    - name: TEST2 Verify 40_vm_start behavior applied to an already on VM (valid only if previous test left it on)
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: T2 call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_starts_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 40_vm_start.yaml
+        - name: T2 Mark TEST2 as Passed
+          ansible.builtin.set_fact:
+            test2_status: "PASSED"
+      rescue:
+        - name: T2R1 Mark TEST2 as FAILED on unexpected output
+          ansible.builtin.set_fact:
+            test2_status: "FAILED"
+            overall_failed: true
+          when:
+            - virt_output.status != "running"
+        - name: T2R2 Mark TEST2 as PASSED
+          ansible.builtin.set_fact:
+            test2_status: "PASSED"
+          when:
+            - virt_output.status == "running"
+
+    - name: TEST3 Verify 41_vm_shutdown behavior applied to an on VM
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: T3 call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_starts_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 41_vm_shutdown.yaml
+        - name: T3 fail test on unexpected output
+          ansible.builtin.fail:
+          when:
+            - virt_output.status != "shutdown"
+        - name: T3 Mark TEST3 as Passed
+          ansible.builtin.set_fact:
+            test3_status: "PASSED"
+      rescue:
+        - name: T3R1 Mark TEST3 as Failed if failed criteria met
+          ansible.builtin.set_fact:
+            test3_status: "FAILED"
+            overall_failed: true
+
+    - debug:
+        var: overall_failed
+    - name: TEST4 Verify 41_vm_shutdown behavior applied to an already on VM (valid only if previous test left it off)
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: T4 call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_starts_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 40_vm_start.yaml
+        - name: T4 Mark TEST4 as Passed
+          ansible.builtin.set_fact:
+            test4_status: "PASSED"
+      rescue:
+        - name: T4R1 Mark TEST4 as FAILED on unexpected output
+          ansible.builtin.set_fact:
+            test4_status: "FAILED"
+            overall_failed: true
+          when:
+            - virt_output.status != "running"
+        - name: T4R2 Mark TEST4 as PASSED
+          ansible.builtin.set_fact:
+            test4_status: "PASSED"
+          when:
+            - virt_output.status == "running"
+    - debug:
+        var: overall_failed
+    - name: Final test report
+      ansible.builtin.debug:
+        msg:
+          - "TEST1: {{ test1_status }}"
+          - "TEST2: {{ test1_status }}"
+          - "TEST3: {{ test1_status }}"
+          - "TEST4: {{ test1_status }}"
+          - "OVERALL: {{ 'FAILED' if overall_failed else 'PASSED' }}"
+    - name: Fail play if any test failed
+      ansible.builtin.fail:
+        msg: "One or more tests failed"
+      when: overall_failed | default(false)

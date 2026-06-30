@@ -1,0 +1,73 @@
+---
+- name: Ensure updated Content
+  hosts: all
+  gather_facts: false
+
+  vars:
+    org_name: sjl_t2
+
+    operating_systems:
+      - rhel10
+
+    do_sync: true
+
+  repositories: >-
+    {%- set repos = [] -%}
+    {%- for os in operating_systems -%}
+    {%- set v = os | regex_replace('^rhel', '') -%}
+    {%- set _ = repos.append([
+          "Red Hat Enterprise Linux for x86_64",
+          "Red Hat Enterprise Linux " ~ v ~ " for x86_64 - AppStream (RPMs)"
+        ]) -%}
+    {%- set _ = repos.append([
+          "Red Hat Enterprise Linux for x86_64",
+          "Red Hat Enterprise Linux " ~ v ~ " for x86_64 - BaseOS (RPMs)"
+        ]) -%}
+    {%- set _ = repos.append([
+          "Red Hat Enterprise Linux for x86_64",
+          "Red Hat Satellite Client 6 for RHEL " ~ v ~ " x86_64 RPMs"
+        ]) -%}
+    {%- endfor -%}
+    {{ repos }}
+
+  tasks:
+    - name: Retrieve the organisation information by running hammer organization info --name "{{ org_name }}" --output json
+      ansible.builtin.command:
+        argv:
+          - hammer
+          - --output
+          - json
+          - organization
+          - info
+          - --name
+          - "{{ org_name }}"
+      register: org_lookup
+      changed_when: false
+
+    - name: Store the organisation ID
+      set_fact:
+        organization_id: >-
+          {{
+            (
+              org_lookup.stdout
+              | from_json
+            ).Id
+          }}
+
+    # -------------------------------------------------------------------------
+    # Ensure repository set is enabled for the requested operating system
+    #
+    # -------------------------------------------------------------------------
+    - name: Ensure Enabled Repository Set
+      include_role:
+        name: sat-mt-hammer
+        tasks_from: ensure_repository_set.yaml
+      vars:
+        product: "{{ item.0 }}"
+        repository: "{{ item.1 }}"
+      loop: "{{ repositories }}"
+
+    # -------------------------------------------------------------------------
+    # Ensure repository set is enabled for the requested operating system
+    #
+    # -------------------------------------------------------------------------

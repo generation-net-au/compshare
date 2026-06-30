@@ -1,0 +1,50 @@
+---
+- name: Set host_uri for libvirt mode
+  ansible.builtin.set_fact:
+    host_uri: "qemu+ssh://{{ host }}/system"
+  when:
+    - mode == "libvirt"
+
+- name: Display task inputs
+  ansible.builtin.debug:
+    msg:
+      - "Inputs provided:"
+      - "Host: {{ host }}"
+      - "Mode: {{ mode }}"
+      - "URI: {{ host_uri }}"
+      - "VM to check: {{ vm_name }}"
+# May need dnf install -y python3-lxml on the host
+- name: Query host before operation
+  community.libvirt.virt:
+    command: status
+    name: "{{ vm_name }}"
+    uri: "{{ host_uri }}"
+  register: virt_output
+  when:
+    - mode == "libvirt"
+
+- name: Display output before change in state
+  ansible.builtin.debug:
+    var: virt_output
+
+- name: Start host
+  community.libvirt.virt:
+    command: destroy
+    name: "{{ vm_name }}"
+    uri: "{{ host_uri }}"
+  when:
+    - mode == "libvirt"
+    - virt_output.status != "shutdown"
+
+- name: Query host after operation
+  community.libvirt.virt:
+    command: status
+    name: "{{ vm_name }}"
+    uri: "{{ host_uri }}"
+  register: virt_output
+  when:
+    - mode == "libvirt"
+
+- name: Display output after change in state
+  ansible.builtin.debug:
+    var: virt_output

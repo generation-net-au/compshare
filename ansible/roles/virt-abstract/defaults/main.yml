@@ -1,0 +1,4 @@
+---
+# Multiple modes can be added to this role to support alternative virtualisation backends
+# Currently supported: libvirt
+mode: libvirt

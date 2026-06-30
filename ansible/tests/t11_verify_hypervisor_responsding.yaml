@@ -1,0 +1,183 @@
+---
+- name: TEST 11_verify_hypervisor_responsding
+  hosts: localhost
+  gather_facts: false
+  vars:
+    host_working: "v2c5"
+    host_non_resolving: "v2c7"
+    host_ip_non_responsive: "v2c6"
+    host_qemu_non_responsive: "j2"
+    vm_not_present: "t1c4"
+    vm_that_is_on: "t1c3"
+    vm_that_is_off: "t1c2"
+    overall_failed: false
+  tasks:
+    - name: Define delegation hosts dynamically setting python3 to be used for the RHEL8 ones
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        ansible_python_interpreter: /usr/bin/python3.9
+      loop:
+        - "{{ host_working }}"
+        - "{{ host_non_resolving }}"
+        - "{{ host_ip_non_responsive }}"
+        - "{{ host_qemu_non_responsive }}"
+
+    - name: Verify python correctly set on the working host
+      debug:
+        var: hostvars[item]
+      loop:
+        - "{{ host_working }}"
+
+    - name: TEST1 Verify 11_verify_hypervisor_responsding fails if host does not resolve
+      block:
+        - name: call role
+          vars:
+            host: "{{ host_non_resolving }}"
+            vm_name: "{{ vm_that_is_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: Mark TEST1 as FAILED
+          ansible.builtin.set_fact:
+            test1_status: "FAILED"
+            overall_failed: true
+      rescue:
+        - name: Mark TEST1 as PASSED
+          ansible.builtin.set_fact:
+            test1_status: "PASSED"
+
+    - name: TEST2 Verify 11_verify_hypervisor_responsding fails if IP is unreachable
+      block:
+        - name: call role
+          vars:
+            host: "{{ host_ip_non_responsive }}"
+            vm_name: "{{ vm_that_is_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: Mark TEST2 as FAILED
+          ansible.builtin.set_fact:
+            test2_status: "FAILED"
+            overall_failed: true
+      rescue:
+        - name: Mark TEST2 as PASSED
+          ansible.builtin.set_fact:
+            test2_status: "PASSED"
+
+    - name: TEST3 Verify 11_verify_hypervisor_responsding fails if connection ok but qemu not there
+      delegate_to: "{{ host_qemu_non_responsive }}"
+      become: true
+      block:
+        - name: call role with unresponsive qemu hostname 
+          vars:
+            host: "{{ host_qemu_non_responsive }}"
+            vm_name: "{{ vm_that_is_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: Mark TEST3 as FAILED
+          ansible.builtin.set_fact:
+            test3_status: "FAILED"
+            overall_failed: true
+      rescue:
+        - name: Mark TEST3 as PASSED
+          ansible.builtin.set_fact:
+            test3_status: "PASSED"
+
+    - name: TEST4 Verify 11_verify_hypervisor_responsding fails if host reachable but VM not there
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_not_present }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: Mark TEST4 as FAILED
+          ansible.builtin.set_fact:
+            test4_status: "FAILED"
+            overall_failed: true
+      rescue:
+        - name: Mark TEST4 as PASSED when VM not found as expected
+          ansible.builtin.set_fact:
+            test4_status: "PASSED"
+          when:
+            - ansible_failed_result.msg == "virtual machine " ~ vm_not_present ~ " not found"
+
+        - name: Mark TEST4 as FAILED for unexpected errors
+          ansible.builtin.set_fact:
+            test4_status: "FAILED"
+            overall_failed: true
+          when:
+            - ansible_failed_result.msg != "virtual machine " ~ vm_not_present ~ " not found"
+
+    - name: TEST5 Verify 11_verify_hypervisor_responsding fails if host reachable and VM on
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: call role 
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_is_on }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: Mark TEST5 as PASSED
+          ansible.builtin.set_fact:
+            test5_status: "PASSED"
+          when:
+            - virt_output.status == "running"
+        - name: Mark TEST5 as FAILED
+          ansible.builtin.set_fact:
+            test5_status: "FAILED"
+          when:
+            - virt_output.status != "running"
+      rescue:
+        - name: Mark TEST5 as FAILED
+          ansible.builtin.set_fact:
+            test5_status: "FAILED"
+            overall_failed: true
+
+    - name: TEST6 Verify 11_verify_hypervisor_responsding fails if host reachable and VM off
+      delegate_to: "{{ host_working }}"
+      become: true
+      block:
+        - name: call role
+          vars:
+            host: "{{ host_working }}"
+            vm_name: "{{ vm_that_is_off }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: Mark TEST6 as PASSED
+          ansible.builtin.set_fact:
+            test6_status: "PASSED"
+          when:
+            - virt_output.status == "shutdown"
+        - name: Mark TEST6 as FAILED
+          ansible.builtin.set_fact:
+            test6_status: "FAILED"
+          when:
+            - virt_output.status != "shutdown"
+      rescue:
+        - name: Mark TEST6 as FAILED
+          ansible.builtin.set_fact:
+            test6_status: "FAILED"
+            overall_failed: true
+
+    - name: Final test report
+      ansible.builtin.debug:
+        msg:
+          - "TEST1: {{ test1_status }}"
+          - "TEST2: {{ test2_status }}"
+          - "TEST3: {{ test3_status }}"
+          - "TEST4: {{ test4_status }}"
+          - "TEST5: {{ test5_status }}"
+          - "TEST6: {{ test6_status }}"
+          - "OVERALL: {{ 'FAILED' if overall_failed else 'PASSED' }}"
+    - name: Fail play if any test failed
+      ansible.builtin.fail:
+        msg: "One or more tests failed"
+      when: overall_failed | default(false)

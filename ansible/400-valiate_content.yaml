@@ -1,0 +1,184 @@
+---
+- name: Content validation VM workflow
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    inputs_host: "v2c2"
+    inputs_vm_name: "ttic1"
+    inputs_snapshot_name: "ttic1_ansible_snap"
+    # In production use we will want to delete snapshot at end:
+    delete_snapshot_at_end: false
+    # host_uri: "qemu+ssh://{{ host }}/system"
+
+  tasks:
+    # RHEL8 Shenanighans
+    # We should now be able to have ansible ssh into the hypervisor and run qemu+ssh locally
+    # To get this working on RHEL8 several extra steps were required:
+    # a Python 3.9 from rpms with the python modules required to make the virt ansible module work installed via pip:
+    #   dnf install -y python39 python39-devel gcc ; python3.9 -m pip install libvirt-python lxml ; dnf -y remove gcc
+    # and the ability for use root on the rhel8 hypervisor to ssh to itself using a key (this can alternatively be substituted
+    # using up qemu+ssh creds)
+    - name: Define delegation hosts dynamically setting python3 to be used for the RHEL8 ones
+      ansible.builtin.add_host:
+        name: "{{ inputs_host }}"
+        ansible_python_interpreter: /usr/bin/python3.9
+
+    - name: Verify python correctly set on the working host
+      ansible.builtin.debug:
+        var: hostvars[inputs_host]
+
+
+    # Check we can resolve the host
+    - name: Verify workable host (resolvable hostname or valid IP)
+      vars:
+        host: "{{ inputs_host }}" 
+        vm_name: "{{ inputs_vm_name }}"
+      ansible.builtin.include_role:
+        name: virt-abstract
+        tasks_from: 10_verify_host_resolves.yaml
+
+    # Ensure we can talk to the hypervisor and the vm is shut down
+    - name: Display virtualization information
+      delegate_to: "{{ inputs_host }}"
+      become: true
+      block:
+        - name: call role with task 11_verify_hypervisor_responsding.yaml
+          vars:
+            host: "{{ inputs_host }}" 
+            vm_name: "{{ inputs_vm_name }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 11_verify_hypervisor_responsding.yaml
+        - name: call role with task 41_vm_shutdown.yaml
+          vars:
+            host: "{{ inputs_host }}" 
+            vm_name: "{{ inputs_vm_name }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 41_vm_shutdown.yaml
+          when: virt_output.status == "running"
+          # we unfortunately cannot apply this to include_role: failed_when: virt_output.status != "shutdown"
+        - name: Fail block on unexpected output
+          # so instead:
+          fail:
+          when: virt_output.status != "shutdown"
+        - name: VM Found to be shutdown
+          debug:
+            msg: "VM Shutdown"
+          when: virt_output.status == "shutdown"
+
+    # Delete a snapshot by the specified name if one already exists
+    - name: Delete snapshot if there is one
+      delegate_to: "{{ inputs_host }}"
+      become: true
+      block:
+        - name: call role with task 30_snapshot_delete.yaml
+          vars:
+            host: "{{ inputs_host }}" 
+            vm_name: "{{ inputs_vm_name }}"
+            snapshot_name: "{{ inputs_snapshot_name }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 30_snapshot_delete.yaml
+
+    # Create the snapshot
+    - name: Snapshot the VM
+      delegate_to: "{{ inputs_host }}"
+      become: true
+      block:
+        - name: call role
+          vars:
+            host: "{{ inputs_host }}" 
+            vm_name: "{{ inputs_vm_name }}"
+            snapshot_name: "{{ inputs_snapshot_name }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 31_snapshot_create.yaml
+    
+    # Ensure we can talk to the hypervisor and the vm is shut down
+    - name: Start the VM
+      delegate_to: "{{ inputs_host }}"
+      become: true
+      block:
+        - name: call role
+          vars:
+            host: "{{ inputs_host }}" 
+            vm_name: "{{ inputs_vm_name }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 40_vm_start.yaml
+
+    # Wait for connection
+    - name: Wait for VM to be ready
+      delegate_to: "{{ inputs_vm_name }}"
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 3600
+        sleep: 10
+        connect_timeout: 30
+   
+    # Check patches are available 
+    - name: Check for updates
+      delegate_to: "{{ inputs_vm_name }}"
+      become: true
+      ansible.builtin.command:
+        argv:
+          - dnf
+          - check-update
+      register: dnf_check
+      changed_when: dnf_check.rc == 100
+      failed_when: dnf_check.rc not in [0, 100]
+
+    - name: Show DNF check output
+      ansible.builtin.debug:
+        msg:
+          - "STDOUT:"
+          - "{{ dnf_check.stdout }}"
+          - "STDERR:"
+          - "{{ dnf_check.stderr }}"
+
+    # Apply patches for real
+    - name: Check for updates
+      delegate_to: "{{ inputs_vm_name }}"
+      become: true
+      ansible.builtin.command:
+        argv:
+          - dnf
+          - -y
+          - update
+      register: dnf_update
+      when: dnf_check.rc == 100
+      changed_when: dnf_update.rc == 0
+      failed_when: dnf_update.rc not in [0]
+
+    # Reboot
+    - name: Reboot the system
+      delegate_to: "{{ inputs_vm_name }}"
+      become: true
+      ansible.builtin.reboot:
+      when: dnf_check.rc == 100
+
+    # Wait for connection
+    - name: Wait for VM to be ready
+      delegate_to: "{{ inputs_vm_name }}"
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 3600
+        sleep: 10
+        connect_timeout: 30
+
+    # Delete a snapshot by the specified name if one already exists
+    - name: Delete the snapshot
+      delegate_to: "{{ inputs_host }}"
+      become: true
+      block:
+        - name: call role
+          vars:
+            host: "{{ inputs_host }}" 
+            vm_name: "{{ inputs_vm_name }}"
+            snapshot_name: "{{ inputs_snapshot_name }}"
+          ansible.builtin.include_role:
+            name: virt-abstract
+            tasks_from: 30_snapshot_delete.yaml
+      when: delete_snapshot_at_end

@@ -1,0 +1,49 @@
+---
+- name: Display task inputs
+  ansible.builtin.debug:
+    msg:
+      - "Inputs provided:"
+      - "Mode: {{ mode }}"
+      - "Host: {{ host }}"
+      - "URI: {{ host_uri }}"
+      - "VM: {{ vm_name }}"
+      - "Snapshot: {{ snapshot_name }}"
+
+- name: Query host before operation
+  community.libvirt.virt:
+    command: status
+    name: "{{ vm_name }}"
+    uri: "{{ host_uri }}"
+  register: virt_output
+  when:
+    - mode == "libvirt"
+
+- name: Display output before change in state
+  ansible.builtin.debug:
+    var: virt_output
+
+- name: Get list of snapshots from virsh
+  ansible.builtin.command: virsh snapshot-list --domain {{ vm_name }} --name
+  register: virsh_snap_list
+  changed_when: false
+
+- name: Register snapshot names as a native YAML list
+  ansible.builtin.set_fact:
+    vm_snapshots: "{{ virsh_snap_list.stdout_lines }}"
+
+- name: Output the resulting list
+  ansible.builtin.debug:
+    var: vm_snapshots
+
+- name: Check if snapshot already exists
+  ansible.builtin.command: virsh snapshot-info --domain {{ vm_name }} --snapshotname {{ snapshot_name }}
+  register: snap_check
+  failed_when: false
+  changed_when: false
+
+- name: Delete existing snapshot if it exists
+  ansible.builtin.command: >
+    virsh snapshot-delete 
+    --domain {{ vm_name }} 
+    --snapshotname {{ snapshot_name }}
+  when: snap_check.rc == 0

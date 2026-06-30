@@ -1,0 +1,117 @@
+---
+- name: Content validation VM workflow
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    host: "v2c6"
+    host_dummy: "v2c7"
+    valid_ip_provided_instead: "8.8.8.8"
+    invalid_ip_provided_instead: "9.9.9.999"
+    overall_failed: false
+
+  tasks:
+  - name: Verify host hostname resolution
+    block:
+      - name: Run valid host check
+        ansible.builtin.include_role:
+          name: virt-abstract
+          tasks_from: 10_verify_host_resolves.yaml
+
+      - name: Mark TEST1 as PASSED
+        ansible.builtin.set_fact:
+          test1_status: "PASSED"
+
+    rescue:
+      - name: Mark TEST1 as FAILED
+        ansible.builtin.set_fact:
+          test1_status: "FAILED"
+          overall_failed: true
+
+  - name: Show TEST1 result
+    ansible.builtin.debug:
+      msg: "TEST 1 {{ test1_status }}"
+
+
+  - name: Expect dummy host to fail
+    block:
+      - name: Run invalid host check (expected failure)
+        ansible.builtin.include_role:
+          name: virt-abstract
+          tasks_from: 10_verify_host_resolves.yaml
+        vars:
+          host: "{{ host_dummy }}"
+
+      - name: If we get here, it unexpectedly succeeded
+        ansible.builtin.set_fact:
+          test2_status: "FAILED"
+          overall_failed: true
+
+    rescue:
+      - name: Expected failure occurred
+        ansible.builtin.set_fact:
+          test2_status: "PASSED"
+
+  - name: Show TEST2 result
+    ansible.builtin.debug:
+        msg: "TEST 2 {{ test2_status }}"
+
+  - name: TEST3 Verify operation if IP passed instead of hostname 
+    block:
+      - name: Call role with a valid IP
+        vars:
+          host: "{{ valid_ip_provided_instead }}"
+        ansible.builtin.include_role:
+          name: virt-abstract
+          tasks_from: 10_verify_host_resolves.yaml
+
+      - name: Mark TEST3 as PASSED
+        ansible.builtin.set_fact:
+          test3_status: "PASSED"
+
+    rescue:
+      - name: Mark TEST3 as FAILED
+        ansible.builtin.set_fact:
+          test3_status: "FAILED"
+          overall_failed: true
+
+  - name: Show TEST3 result
+    ansible.builtin.debug:
+      msg: "TEST 3 {{ test3_status }}"
+
+  - name: TEST4 Verify operation if IP passed instead of hostname 
+    block:
+      - name: Call role with an invalid IP
+        vars:
+          host: "{{ invalid_ip_provided_instead }}"
+        ansible.builtin.include_role:
+          name: virt-abstract
+          tasks_from: 10_verify_host_resolves.yaml
+
+      - name: Mark TEST4 as FAILED
+        ansible.builtin.set_fact:
+          test4_status: "FAILED"
+
+    rescue:
+      - name: Expected failure occurred
+        ansible.builtin.set_fact:
+          test4_status: "PASSED"
+
+  - name: Show TEST4 result
+    ansible.builtin.debug:
+      msg: "TEST 4 {{ test4_status }}"
+
+######################
+
+  - name: Final test report
+    ansible.builtin.debug:
+      msg:
+        - "TEST1: {{ test1_status }}"
+        - "TEST2: {{ test2_status }}"
+        - "TEST3: {{ test3_status }}"
+        - "TEST4: {{ test4_status }}"
+        - "OVERALL: {{ 'FAILED' if overall_failed else 'PASSED' }}"
+  - name: Fail play if any test failed
+    ansible.builtin.fail:
+      msg: "One or more tests failed"
+    when: overall_failed | default(false)
