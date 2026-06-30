@@ -1,4 +1,5 @@
 ---
+# Query Requested Red Hat Product RepoSet
 - name: Query repository set
   command: >
     hammer repository-set show
@@ -7,11 +8,17 @@
     --name "{{ repository }}"
   register: repo_set
   changed_when: false
+  when:
+    - product != "Fedora EPEL"
 
+# Check if Red Hat Product repository is enabled in the Reposet
 - name: Check if repository is enabled
   set_fact:
     repo_enabled: "{{ '1)' in repo_set.stdout }}"
+  when:
+    - product != "Fedora EPEL"
 
+# Enable Red Hat Product repo in the reposet if necessary
 - name: Enable repository set if not already enabled
   command: >
     hammer repository-set enable
@@ -25,6 +32,7 @@
     - product != "Fedora EPEL"
     - not repo_enabled
 
+# Query the Red Hat Product repo name from the reposet
 - name: Re-query repository set to capture repo name
   command: >
     hammer repository-set show
@@ -36,6 +44,7 @@
   when:
     - product != "Fedora EPEL"
 
+# Set the repo name into enabled_repository from previous query for Red Hat Products or from the reposet name for EPEL
 - name: Extract enabled repository name or for non-RH Repos like EPEL use reposet as the repository
   set_fact:
     enabled_repository: "{{ repo_set_with_reponame.stdout | regex_findall('(?m)^\\s*Name:\\s*(.+)$') | last | default(repository) }}"
