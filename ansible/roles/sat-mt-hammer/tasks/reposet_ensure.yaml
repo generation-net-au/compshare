@@ -56,6 +56,7 @@
   # 1) Name: Red Hat Satellite Client 6 for RHEL 9 x86_64 RPMs
   # 2) Name: Red Hat Enterprise Linux 9 for x86_64 - BaseOS RPMs 9
   # 3) Name: Red Hat Enterprise Linux 9 for x86_64 - AppStream RPMs 9
+  # For simplicity, rather than output it to a json and scan the array, we grep
 
 - name: Determine if Repo Needs to be Added to Content View
   set_fact:
@@ -64,16 +65,18 @@
 
 - name: Lookup repository for its ID
   command: >
-    hammer repository info --output json
+    hammer --output json repository info 
     --organization-id "{{ organization_id }}"
     --product "{{ product }}"
     --name "{{ enabled_repository }}"
+  changed_when: false
   register: repoid_lookup 
   when: not repo_already_present
 
 - name: Extract repository ID
   set_fact:
     repo_id: "{{ (repoid_lookup.stdout | from_json).Id }}"
+  changed_when: false
   when: not repo_already_present
 
 - name: Ensure our repo is set in the Content View
