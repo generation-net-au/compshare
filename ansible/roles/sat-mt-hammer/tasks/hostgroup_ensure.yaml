@@ -39,8 +39,8 @@
       - "{{ lifecycle_environment_id }}"
       - --content-view-id
       - "{{ content_view_id }}"
-      - --parent-id
-      - "{{ parent_hostgroup_id | default('') }}"
+      - --parent-title
+      - "{{ parent_hostgroup_title | default('') }}"
   when: hostgroup_lookup.rc != 0
 
 # -----------------------------------------------------------------------------
