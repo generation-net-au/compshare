@@ -8,6 +8,10 @@
   register: repo_set
   changed_when: false
 
+- name: Check if repository is enabled
+  set_fact:
+    repo_enabled: "{{ '1)' in repo_set.stdout }}"
+
 - name: Enable repository set if not already enabled
   command: >
     hammer repository-set enable
@@ -17,7 +21,7 @@
     --releasever {{ releasever }}
     --name "{{ repository }}"
   register: enable_result
-  when: repo_set.stdout is search('Enabled Repositories:\\s*$')
+  when: repo_enabled 
 
 - name: Re-query repository set after enabling to capture repository name
   command: >
