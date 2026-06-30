@@ -46,7 +46,7 @@
 
 - name: Lookup content view current repos
   command: >
-    hammer content-view info --output json --fields "Yum repositories/name"
+    hammer content-view info --fields "Yum repositories/name"
     --organization-id "{{ organization_id }}"
     --name "{{ cv }}"
   register: content_view_current_repos 
