@@ -21,7 +21,7 @@
     --releasever {{ releasever }}
     --name "{{ repository }}"
   register: enable_result
-  when: repo_enabled 
+  when: not repo_enabled 
 
 - name: Re-query repository set after enabling to capture repository name
   command: >

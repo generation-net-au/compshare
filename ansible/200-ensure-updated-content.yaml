@@ -10,6 +10,7 @@
       - rhel10
 
     do_sync: true
+
     repositories: >-
       {%- set repos = [] -%}
       {%- for os in operating_systems -%}
