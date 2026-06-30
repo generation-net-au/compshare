@@ -2,7 +2,7 @@
 - name: Query repository set
   command: >
     hammer repository-set show
-    --organization "{{ organization }}"
+    --organization-id "{{ organization_id }}"
     --product "{{ product }}"
     --name "{{ repository }}"
   register: repo_set
