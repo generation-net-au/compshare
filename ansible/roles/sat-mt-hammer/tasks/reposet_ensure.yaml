@@ -34,12 +34,7 @@
 
 - name: Extract enabled repository name
   set_fact:
-    enabled_repository: >-
-      {{
-        (repo_set_with_reponame.stdout
-         | regex_findall('(?m)^\\s*Name:\\s*(.+)$')
-        | last)
-      }}
+    enabled_repository: "{{ repo_set_with_reponame.stdout | regex_findall('(?m)^\\s*Name:\\s*(.+)$') | last }}"
 
 - name: Synchronize repository
   command: >
