@@ -61,7 +61,7 @@
 - name: Determine if Repo Needs to be Added to Content View
   set_fact:
     # This creates a simple boolean we use to drive subsequent behavior
-    repo_already_present: "{{ repository in content_view_current_repos.stdout }}"
+    repo_already_present: "{{ enabled_repository in content_view_current_repos.stdout }}"
 
 - name: Lookup repository for its ID
   command: >
