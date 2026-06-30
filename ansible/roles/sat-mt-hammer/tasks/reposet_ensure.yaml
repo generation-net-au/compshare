@@ -11,7 +11,7 @@
 - name: Enable repository set if not already enabled
   command: >
     hammer repository-set enable
-    --organization "{{ organization }}"
+    --organization-id "{{ organization_id }}"
     --product "{{ product }}"
     --basearch x86_64
     --releasever {{ releasever }}
@@ -22,7 +22,7 @@
 - name: Re-query repository set after enabling to capture repository name
   command: >
     hammer repository-set show
-    --organization "{{ organization }}"
+    --organization-id "{{ organization_id }}"
     --product "{{ product }}"
     --name "{{ repository }}"
   register: repo_set
@@ -41,7 +41,7 @@
 - name: Synchronize repository
   command: >
     hammer repository synchronize
-    --organization "{{ organization }}"
+    --organization-id "{{ organization_id }}"
     --product "{{ product }}"
     --name "{{ enabled_repository }}"
   when: do_sync | bool
