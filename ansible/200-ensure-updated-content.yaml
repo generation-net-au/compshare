@@ -37,7 +37,14 @@
             v,
             cv
           ]) -%}
+      {%- set _ = repos.append([
+            "Fedora EPEL",
+            "EPEL " ~ v ~ " x86_64",
+            v,
+            cv
+          ]) -%}
 
+         
       {%- endfor -%}
 
       {{ repos }}
