@@ -21,7 +21,9 @@
     --releasever {{ releasever }}
     --name "{{ repository }}"
   register: enable_result
-  when: not repo_enabled 
+  when:
+    - product != "Fedora EPEL"
+    - not repo_enabled
 
 - name: Re-query repository set to capture repo name
   command: >
@@ -31,10 +33,12 @@
     --name "{{ repository }}"
   register: repo_set_with_reponame
   changed_when: false
+  when:
+    - product != "Fedora EPEL"
 
-- name: Extract enabled repository name
+- name: Extract enabled repository name or for non-RH Repos like EPEL use reposet as the repository
   set_fact:
-    enabled_repository: "{{ repo_set_with_reponame.stdout | regex_findall('(?m)^\\s*Name:\\s*(.+)$') | last }}"
+    enabled_repository: "{{ repo_set_with_reponame.stdout | regex_findall('(?m)^\\s*Name:\\s*(.+)$') | last | default(repository) }}"
 
 - name: Synchronize repository
   command: >
