@@ -4,7 +4,7 @@
   gather_facts: false
 
   vars:
-    inputs_host: "v2c2"
+    inputs_host: "v2d8"
     inputs_vm_name: "ttic1"
     inputs_snapshot_name: "ttic1_ansible_snap"
     # In production use we will want to delete snapshot at end:
